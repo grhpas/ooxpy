@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tutorial 1: Your first Word document · oox</title>
+<style>
+  body { font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; max-width: 46rem; margin: 2rem auto; padding: 0 1rem; color: #1d1d1f; }
+  h1 { font-size: 1.7rem; margin-bottom: .2rem; } h2 { font-size: 1.2rem; margin-top: 2rem; }
+  .sub { color: #666; margin-top: 0; }
+  pre { background: #f5f5f7; border: 1px solid #e3e3e8; border-radius: 6px; padding: .8rem 1rem; overflow-x: auto; font-size: .9rem; line-height: 1.45; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  p code, li code, td code { background: #f0f0f3; padding: .05rem .3rem; border-radius: 4px; font-size: .9em; }
+  pre.out { background: #fff; border-style: dashed; color: #444; }
+  table { border-collapse: collapse; margin: .5rem 0; } td, th { border: 1px solid #ddd; padding: .35rem .6rem; text-align: left; vertical-align: top; }
+  nav { font-size: .9rem; margin-bottom: 1.5rem; } nav a { color: #0b5cad; }
+  .note { border-left: 3px solid #0b5cad; padding: .2rem .9rem; background: #f4f8fd; }
+</style>
+</head>
+<body>
+<nav><a href="index.html">Tutorials</a> · 1 · <a href="edit_existing.html">2</a> · <a href="showcase.html">3</a> · <a href="report.html">4</a> · <a href="tables_review.html">5</a> · <a href="forms_fields.html">6</a> · <a href="excel_report.html">7</a> · <a href="excel_dashboard.html">8</a> · <a href="charts.html">9</a> · <a href="slides.html">10</a></nav>
+<h1>Tutorial 1: Your first Word document</h1>
+<p class="sub">Factories, schema order, early errors. Script: <code>examples/hello.py</code></p>
+
+<h2>The idea</h2>
+<p>oox gives you <strong>one factory function per OOXML element</strong>, generated from the
+schema, the same way odfpy does for ODF. You build the XML tree directly and oox
+checks it as you go. A Word paragraph is <code>w:p</code>, which holds runs
+(<code>w:r</code>), which hold text (<code>w:t</code>):</p>
+
+<pre><code class="run">from oox import WordprocessingDocument
+from oox.ns import w
+
+doc = WordprocessingDocument.new()
+doc.body.add(
+    w.P(w.R(w.T("Hello, OOXML"))),
+    w.P(w.R(w.RPr(w.B()), w.T("Bold")), w.R(w.T(" and normal"))),
+)
+doc.save("hello.docx")</code></pre>
+
+<p><code>w.RPr</code> holds run properties: <code>w.B()</code> is bold, <code>w.I()</code>
+italic, <code>w.Sz(val=28)</code> is the size in half-points (14 pt).</p>
+
+<h2>Styles, headings and properties</h2>
+<p>A new document comes set up the way Word sets one up: styles (Normal, Title,
+Heading 1–3, List Paragraph, Table Grid…), the Office theme and an A4 page
+(<code>new(page="Letter")</code>, <code>landscape=True</code>). Styles can be referred to
+by name:</p>
+<pre><code class="run">report = WordprocessingDocument.new()
+report.add_heading("Quarterly report", 0)        # 0 = Title
+report.add_heading("Introduction", 1)
+report.add_paragraph("Body text in the Normal style.")
+report.add_paragraph("An indented item", style="List Paragraph")
+report.properties.title = "Quarterly report"     # File &gt; Properties
+report.properties.creator = "Ada"
+report.save("report.docx")
+print(report.style_id("Heading 1"))</code></pre>
+<pre class="out">Heading1</pre>
+<h2>Lists</h2>
+<pre><code class="run">steps = report.new_list("decimal")        # also "bullet" and "legal" (1. 1.1. 1.1.1.)
+steps.add("Collect the data")
+steps.add("by region", level=1)
+steps.add("Write the summary")
+again = steps.restart()                    # same format, starts again at 1
+again.add("New list")
+print([label for _, label in report.list_labels()])
+report.save("report.docx")</code></pre>
+<pre class="out">['1.', 'a.', '2.', '1.']</pre>
+<p><code>list_labels()</code> also works on documents from Word or LibreOffice: it computes the
+number Word displays for each list paragraph.</p>
+
+<p><code>WordprocessingDocument.new(minimal=True)</code> gives the smallest valid package
+instead, with no styles; Word fills in its own defaults.</p>
+
+<h2>Order is handled for you</h2>
+<p>Word rejects properties in the wrong order ("unreadable content"). oox inserts
+every child at its schema position, so you can write them in any order:</p>
+
+<pre><code class="run">p = w.P(w.PPr(w.Jc(val="center"), w.Spacing(after=240), w.PStyle(val="Title")))
+print([child.tag_name for child in p[0]])</code></pre>
+<pre class="out">['w:pStyle', 'w:spacing', 'w:jc']</pre>
+
+<h2>Mistakes fail early</h2>
+<pre><code class="run">import textwrap
+from oox import OoxValidationError
+
+for attempt in (lambda: w.Jc(val="middle"),      # not an allowed value
+                lambda: w.P(w.Tbl()),            # a table can't go inside a paragraph
+                lambda: w.Spacing(aftr=240)):    # typo
+    try:
+        attempt()
+    except OoxValidationError as e:
+        print(type(e).__name__, "-", textwrap.shorten(str(e), 72))</code></pre>
+<pre class="out">InvalidAttributeValue - w:val='middle' is not one of: left, start, center, right, end, [...]
+InvalidChild - &lt;w:tbl&gt; is not allowed in &lt;w:p&gt;; allowed: m:acc, m:bar, [...]
+InvalidAttribute - w:spacing has no attribute 'aftr'; did you mean after, w_after?</pre>
+<p>Use <code>with oox.lenient():</code> to turn the checks off, e.g. while repairing odd files.</p>
+
+<h2>Attributes</h2>
+<p>Attributes are keyword arguments named after the attribute's local name. Python values
+are converted for you:</p>
+<table>
+<tr><th>You write</th><th>XML</th></tr>
+<tr><td><code>w.Spacing(after=240)</code></td><td><code>w:after="240"</code></td></tr>
+<tr><td><code>w.B(val=False)</code></td><td><code>w:val="0"</code></td></tr>
+<tr><td><code>w.FooterReference(type="default", r_id="rId7")</code></td><td><code>r:id</code>: add the prefix when a name is ambiguous</td></tr>
+<tr><td><code>w.Spacing(**{"w:line": 360})</code></td><td>any attribute by its prefixed name</td></tr>
+</table>
+
+<h2>Text helpers and checking</h2>
+<pre><code class="run">from oox import teletype
+
+p = w.P()
+teletype.addTextToElement(p, "Name:\tAda\nsecond line")   # \t -> w:tab, \n -> w:br
+doc.body.add(p)
+print(teletype.extractText(p))
+print(doc.document.validate())     # [] means no problems found
+doc.save("hello.docx")</code></pre>
+
+<h2>Next</h2>
+<ul>
+<li><code>examples/hello.py</code> builds a centered title, a shaded table and page setup.</li>
+<li>Coming from odfpy? <code>addElement</code>, <code>addText</code>, <code>childNodes</code>,
+<code>getElementsByType</code>, <code>teletype</code> and <code>save(name, True)</code> all work.
+See <code>docs/ODFPY_COMPAT.md</code>.</li>
+<li><a href="edit_existing.html">Tutorial 2</a>: open and edit files made elsewhere.</li>
+</ul>
+</body>
+</html>

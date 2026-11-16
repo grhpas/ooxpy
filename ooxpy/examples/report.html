@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tutorial 4: Structured Word reports · oox</title>
+<style>
+  body { font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; max-width: 46rem; margin: 2rem auto; padding: 0 1rem; color: #1d1d1f; }
+  h1 { font-size: 1.7rem; margin-bottom: .2rem; } h2 { font-size: 1.2rem; margin-top: 2rem; }
+  .sub { color: #666; margin-top: 0; }
+  pre { background: #f5f5f7; border: 1px solid #e3e3e8; border-radius: 6px; padding: .8rem 1rem; overflow-x: auto; font-size: .9rem; line-height: 1.45; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  p code, li code, td code { background: #f0f0f3; padding: .05rem .3rem; border-radius: 4px; font-size: .9em; }
+  pre.out { background: #fff; border-style: dashed; color: #444; }
+  table { border-collapse: collapse; margin: .5rem 0; } td, th { border: 1px solid #ddd; padding: .35rem .6rem; text-align: left; vertical-align: top; }
+  nav { font-size: .9rem; margin-bottom: 1.5rem; } nav a { color: #0b5cad; }
+  .note { border-left: 3px solid #0b5cad; padding: .2rem .9rem; background: #f4f8fd; }
+</style>
+</head>
+<body>
+<nav><a href="index.html">Tutorials</a> · <a href="hello.html">1</a> · <a href="edit_existing.html">2</a> · <a href="showcase.html">3</a> · 4 · <a href="tables_review.html">5</a> · <a href="forms_fields.html">6</a> · <a href="excel_report.html">7</a> · <a href="excel_dashboard.html">8</a> · <a href="charts.html">9</a> · <a href="slides.html">10</a></nav>
+<h1>Tutorial 4: Structured Word reports</h1>
+<p class="sub">Sections, headers and footers, links, notes, comments, a table of contents and
+template placeholders. Script: <code>examples/report.py</code></p>
+
+<h2>Headers, footers and page numbers</h2>
+<p>A document is made of <em>sections</em>; each has its own page setup and headers.
+<code>{PAGE}</code>, <code>{NUMPAGES}</code> and <code>{SECTIONPAGES}</code> become fields
+that Word fills in. A tab (<code>\t</code>) moves to the center, a second one to the right
+margin:</p>
+<pre><code class="run">from oox import WordprocessingDocument
+from oox.ns import w
+
+doc = WordprocessingDocument.new()
+doc.add_heading("Report", 0)
+doc.add_paragraph("Body text.")
+sec = doc.sections[0]
+sec.header_text("Example Ltd\t\tConfidential")
+sec.footer_text("Page {PAGE} of {NUMPAGES}", align="center")
+sec.different_first_page = True            # nothing on page 1 ...
+sec.header_text("Cover", kind="first")     # ... unless you add a "first" header
+print(sec)</code></pre>
+<pre class="out">&lt;Section portrait 11906x16838 twips&gt;</pre>
+<p>Kinds are <code>"default"</code>, <code>"first"</code> and <code>"even"</code> (an
+<code>"even"</code> header switches on different odd and even pages).</p>
+
+<h2>A landscape section</h2>
+<pre><code class="run">wide = doc.add_section(landscape=True)     # starts on a new page
+doc.add_heading("Appendix", 1)
+print([s.orientation for s in doc.sections], wide.linked_to_previous("footer"))
+wide.header_text("Appendix", align="right")  # its own header; the footer stays linked</code></pre>
+<pre class="out">['portrait', 'landscape'] True</pre>
+<p>A new section shows the previous section's headers and footers ("Link to Previous" in
+Word) until you give it its own.</p>
+
+<h2>Links, bookmarks and notes</h2>
+<pre><code class="run">p = doc.add_paragraph("See ")
+doc.add_hyperlink(p, "Ecma", url="https://ecma-international.org/")
+p.add(w.R(w.T(" and ", space="preserve")))
+doc.add_hyperlink(p, "the appendix", anchor="appendix")        # internal link
+doc.add_bookmark("appendix", doc.add_heading("Figures", 2))
+doc.add_footnote(p, "A footnote.")
+doc.add_endnote(p, "An endnote.")
+doc.add_comment(p, "Please check.", author="Ada Lovelace")
+print(doc.hyperlinks())
+print(doc.footnotes(), doc.comments()[0]["author"])</code></pre>
+<pre class="out">[('Ecma', 'https://ecma-international.org/'), ('the appendix', '#appendix')]
+[(1, 'A footnote.')] Ada Lovelace</pre>
+<p>The readers work on documents from Word and LibreOffice too. Styles such as
+<em>Hyperlink</em> or <em>Footnote Text</em> are added the first time they are needed.</p>
+
+<h2>Table of contents</h2>
+<pre><code class="run">from oox import teletype
+
+toc = doc.add_toc(levels=(1, 2), before=doc.body[1])   # after the title
+print([teletype.extractText(p) for p in toc])</code></pre>
+<pre class="out">['Contents', 'Appendix', 'Figures']</pre>
+<p>The TOC is a real Word field, pre-filled with the current headings. Word adds the page
+numbers when the field is updated (right-click &gt; Update Field, or F9).
+<code>update_on_open=True</code> makes Word offer the update when the file opens, but that
+shows a prompt.</p>
+
+<h2>Templates: fill in placeholders</h2>
+<p>Word splits text into runs wherever formatting or editing history changes, so
+<code>{{name}}</code> is often stored in several pieces. <code>replace_text</code> matches
+across runs, in the body, headers, footers, notes and comments:</p>
+<pre><code class="run">doc.body.add(w.P(w.R(w.T("Dear {{na")), w.R(w.RPr(w.B()), w.T("me}},"))))
+print(doc.replace_text({"{{name}}": "Ada"}))
+doc.save("report.docx")</code></pre>
+<pre class="out">{'{{name}}': 1}</pre>
+<p>The replacement takes the formatting of the run where the placeholder starts.
+<code>open_document("template.docx")</code> then <code>replace_text</code> then
+<code>save</code> is the whole template workflow.</p>
+</body>
+</html>

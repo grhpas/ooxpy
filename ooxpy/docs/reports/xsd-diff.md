@@ -1,0 +1,903 @@
+# SDK data vs XSD: IR diff
+
+- SDK: Open XML SDK data @ 431ab05cf160248cc3885a4a766026d4f8243792 2026-08-18
+- XSD: ISO/IEC 29500-4:2016 Transitional XSDs, plus Microsoft's Word extension XSDs (wml-2010 … 2020), the MCE and OPC schemas
+- XSD types: 2531; SDK types in the XSD's namespaces: 2700; paired: 2637 (404 through context)
+
+| Category | Findings | Namespaces |
+|---|---|---|
+| Children on one side only (`children`) | 112 | w 63, a 13, m 12, c 9, p 4, x 4, v 2, vt 2 |
+| Same children, different content model (`model`) | 66 | x 34, w 19, m 5, c 3, a 2, v 2, p 1 |
+| Attributes on one side only (`attrs`) | 83 | x 28, v 16, w 13, p 10, a 5, c 3, o 3, xdr 2 |
+| Required on one side only (`required`) | 110 | c 44, x 32, w 17, a 7, m 5, o 2, p 1, dgm 1 |
+| Enumeration values differ (`enum`) | 105 | w 45, v 35, x 8, p 7, a 2, c 2, m 2, w10 2 |
+| Simple content on one side only (`text`) | 1 | x 1 |
+| Paired through context, different type names (`renamed`) | 404 | w 92, c 79, x 54, b 54, xvml 37, a 36, p 29, xdr 7 |
+| Types only in the SDK data (in the XSD's namespaces) (`only_sdk`) | 70 | w14 54, w 8, x 3, dgm 2, p 2, vt 1 |
+| Types only in the XSD (`only_xsd`) | 70 | wp 24, w 11, cp 9, x 8, ns169 5, a 3, mc 3, ns168 3 |
+
+Direction (children, attributes, enumerations, required):
+- **SDK stricter** (oox's validator may flag what ISO/IEC 29500 allows): enum 94, children 93, required 88, attrs 52
+- **XSD stricter** (oox may accept what ISO/IEC 29500 forbids): enum 65, children 59, attrs 43, required 22
+
+Of the model differences, 35 differ only in finite maximums (the SDK's implementation limits, e.g. `a:tr{1,1000}`); they are listed last.
+
+147 SDK children fall under an `xsd:any` in the XSD and aren't counted as differences.
+
+SDK extension children/attributes inside paired types (not differences): w14 340, c15 97, p14 77, c16 35, w16du 30, a14 29, x14 29, oac 27, w15 24, x15 24, pc 22, emma 17, p15 16, wp14 12, c14 9
+
+## Children on one side only
+
+- `a:CT_Color/a:accent1` (SDK: `a:CT_Color2`): XSD only: `a:schemeClr`
+- `a:CT_Color/a:accent2` (SDK: `a:CT_Color2`): XSD only: `a:schemeClr`
+- `a:CT_Color/a:accent3` (SDK: `a:CT_Color2`): XSD only: `a:schemeClr`
+- `a:CT_Color/a:accent4` (SDK: `a:CT_Color2`): XSD only: `a:schemeClr`
+- `a:CT_Color/a:accent5` (SDK: `a:CT_Color2`): XSD only: `a:schemeClr`
+- `a:CT_Color/a:accent6` (SDK: `a:CT_Color2`): XSD only: `a:schemeClr`
+- `a:CT_Color/a:dk1` (SDK: `a:CT_Color2`): XSD only: `a:schemeClr`
+- `a:CT_Color/a:dk2` (SDK: `a:CT_Color2`): XSD only: `a:schemeClr`
+- `a:CT_Color/a:folHlink` (SDK: `a:CT_Color2`): XSD only: `a:schemeClr`
+- `a:CT_Color/a:hlink` (SDK: `a:CT_Color2`): XSD only: `a:schemeClr`
+- `a:CT_Color/a:lt1` (SDK: `a:CT_Color2`): XSD only: `a:schemeClr`
+- `a:CT_Color/a:lt2` (SDK: `a:CT_Color2`): XSD only: `a:schemeClr`
+- `a:CT_OfficeArtExtensionList/dgm:extLst` (SDK: `dgm:CT_DiagramDefinitionExtensionList`): SDK only: `dgm:ext`; XSD only: `a:ext`
+- `a:CT_ShapeProperties/c:spPr` (SDK: `a:CT_ChartShapeProperties`): XSD only: `a:grpFill`
+- `a:CT_TableCellProperties/a:tcPr`: XSD only: `a:headers`
+- `c:CT_BubbleSer/c:ser`: SDK only: `c:pictureOptions`
+- `c:CT_LineSer/c:ser`: SDK only: `c:pictureOptions`
+- `c:CT_PieSer/c:ser`: SDK only: `c:pictureOptions`
+- `c:CT_PivotFmt/c:pivotFmt`: XSD only: `c:txPr`
+- `c:CT_RadarSer/c:ser`: SDK only: `c:pictureOptions`
+- `c:CT_Surface3DChart/c:surface3DChart`: SDK only: `c:varyColors`
+- `c:CT_SurfaceSer/c:ser`: SDK only: `c:bubble3D`, `c:pictureOptions`
+- `c:CT_Tx/c:tx`: SDK only: `c:strLit`
+- `m:CT_CtrlPr/m:ctrlPr`: SDK only: `w:moveFrom`, `w:moveTo`
+- `m:CT_OMath/m:oMath`: SDK only: `w:contentPart`; XSD only: `w:smartTag`
+- `m:CT_OMathArg/m:deg`: SDK only: `w:contentPart`; XSD only: `w:smartTag`
+- `m:CT_OMathArg/m:den`: SDK only: `w:contentPart`; XSD only: `w:smartTag`
+- `m:CT_OMathArg/m:e`: SDK only: `w:contentPart`; XSD only: `w:smartTag`
+- `m:CT_OMathArg/m:fName`: SDK only: `w:contentPart`; XSD only: `w:smartTag`
+- `m:CT_OMathArg/m:lim`: SDK only: `w:contentPart`; XSD only: `w:smartTag`
+- `m:CT_OMathArg/m:num`: SDK only: `w:contentPart`; XSD only: `w:smartTag`
+- `m:CT_OMathArg/m:sub`: SDK only: `w:contentPart`; XSD only: `w:smartTag`
+- `m:CT_OMathArg/m:sup`: SDK only: `w:contentPart`; XSD only: `w:smartTag`
+- `m:CT_OMathPara/m:oMathPara`: SDK only: `m:r`, `w:bookmarkEnd`, `w:bookmarkStart`, `w:commentRangeEnd`, `w:commentRangeStart`, `w:contentPart`, `w:customXmlDelRangeEnd`, `w:customXmlDelRangeStart`, `w:customXmlInsRangeEnd`, `w:customXmlInsRangeStart`, `w:customXmlMoveFromRangeEnd`, `w:customXmlMoveFromRangeStart`, `w:customXmlMoveToRangeEnd`, `w:customXmlMoveToRangeStart`, `w:del`, `w:ins`, `w:moveFrom`, `w:moveFromRangeEnd`, `w:moveFromRangeStart`, `w:moveTo`, `w:moveToRangeEnd`, `w:moveToRangeStart`, `w:permEnd`, `w:permStart`, `w:proofErr`, `w:r`
+- `m:CT_R/m:r`: XSD only: `w:contentPart`
+- `o:CT_ShapeDefaults/o:shapedefaults`: SDK only: `v:imagedata`
+- `op:CT_Property/op:property`: SDK only: `vt:cf`
+- `p:CT_BackgroundProperties/p:bgPr`: XSD only: `a:grpFill`
+- `p:CT_Presentation/p:presentation`: XSD only: `p:smartTags`
+- `p:CT_TLAnimVariant/p:progress` (SDK: `p:CT_TLAnimFloat`): XSD only: `p:boolVal`, `p:clrVal`, `p:intVal`, `p:strVal`
+- `p:CT_TimeNodeList/p:tnLst` (SDK: `p:CT_RootTimeNode`): XSD only: `p:anim`, `p:animClr`, `p:animEffect`, `p:animMotion`, `p:animRot`, `p:animScale`, `p:audio`, `p:cmd`, `p:excl`, `p:seq`, `p:set`, `p:video`
+- `v:CT_Group/v:group`: XSD only: `o:callout`, `o:extrusion`, `o:signatureline`, `o:skew`, `pvml:textdata`, `v:fill`, `v:formulas`, `v:handles`, `v:imagedata`, `v:path`, `v:shadow`, `v:stroke`, `v:textbox`, `v:textpath`, `w10:borderbottom`, `w10:borderleft`, `w10:borderright`, `w10:bordertop`
+- `v:CT_Shape/v:shape`: XSD only: `o:equationxml`
+- `vt:CT_Variant/vt:variant`: SDK only: `vt:cf`
+- `vt:CT_Vector/vt:vector`: SDK only: `vt:cf`
+- `w:CT_Background/w:background`: XSD only: `w:drawing`
+- `w:CT_BdoContentRun/w:bdo`: SDK only: `m:acc`, `m:bar`, `m:borderBox`, `m:box`, `m:d`, `m:eqArr`, `m:f`, `m:func`, `m:groupChr`, `m:limLow`, `m:limUpp`, `m:m`, `m:nary`, `m:phant`, `m:r`, `m:rad`, `m:sPre`, `m:sSub`, `m:sSubSup`, `m:sSup`, `w:contentPart`; XSD only: `w:smartTag`
+- `w:CT_Body/w:body`: SDK only: `w:contentPart`; XSD only: `m:oMath`, `m:oMathPara`
+- `w:CT_Body/w:docPartBody`: SDK only: `w:contentPart`; XSD only: `m:oMath`, `m:oMathPara`
+- `w:CT_Comment/w:comment`: XSD only: `m:oMath`, `m:oMathPara`, `w:customXmlDelRangeEnd`, `w:customXmlDelRangeStart`, `w:customXmlInsRangeEnd`, `w:customXmlInsRangeStart`, `w:customXmlMoveFromRangeEnd`, `w:customXmlMoveFromRangeStart`, `w:customXmlMoveToRangeEnd`, `w:customXmlMoveToRangeStart`, `w:del`, `w:ins`, `w:moveFrom`, `w:moveFromRangeEnd`, `w:moveFromRangeStart`, `w:moveTo`, `w:moveToRangeEnd`, `w:moveToRangeStart`
+- `w:CT_CustomXmlBlock/w:customXml`: SDK only: `w:contentPart`; XSD only: `m:oMath`, `m:oMathPara`
+- `w:CT_CustomXmlCell/w:customXml`: SDK only: `w:contentPart`; XSD only: `m:oMath`, `m:oMathPara`
+- `w:CT_CustomXmlRow/w:customXml`: SDK only: `w:contentPart`; XSD only: `m:oMath`, `m:oMathPara`
+- `w:CT_CustomXmlRun/w:customXml`: SDK only: `m:acc`, `m:bar`, `m:borderBox`, `m:box`, `m:d`, `m:eqArr`, `m:f`, `m:func`, `m:groupChr`, `m:limLow`, `m:limUpp`, `m:m`, `m:nary`, `m:phant`, `m:r`, `m:rad`, `m:sPre`, `m:sSub`, `m:sSubSup`, `m:sSup`, `w:contentPart`; XSD only: `w:smartTag`
+- `w:CT_DirContentRun/w:dir`: SDK only: `m:acc`, `m:bar`, `m:borderBox`, `m:box`, `m:d`, `m:eqArr`, `m:f`, `m:func`, `m:groupChr`, `m:limLow`, `m:limUpp`, `m:m`, `m:nary`, `m:phant`, `m:r`, `m:rad`, `m:sPre`, `m:sSub`, `m:sSubSup`, `m:sSup`, `w:contentPart`; XSD only: `w:smartTag`
+- `w:CT_FFData/w:ffData`: XSD only: `w:label`, `w:tabIndex`
+- `w:CT_Frame/w:frame`: XSD only: `w:longDesc`, `w:title`
+- `w:CT_Frameset/w:frameset`: XSD only: `w:title`
+- `w:CT_FtnEdn/w:endnote`: SDK only: `w:contentPart`; XSD only: `m:oMath`, `m:oMathPara`
+- `w:CT_FtnEdn/w:footnote`: SDK only: `w:contentPart`; XSD only: `m:oMath`, `m:oMathPara`
+- `w:CT_HdrFtr/w:ftr`: SDK only: `w:contentPart`; XSD only: `m:oMath`, `m:oMathPara`
+- `w:CT_HdrFtr/w:hdr`: SDK only: `w:contentPart`; XSD only: `m:oMath`, `m:oMathPara`
+- `w:CT_Hyperlink/w:hyperlink`: SDK only: `m:acc`, `m:bar`, `m:borderBox`, `m:box`, `m:d`, `m:eqArr`, `m:f`, `m:func`, `m:groupChr`, `m:limLow`, `m:limUpp`, `m:m`, `m:nary`, `m:phant`, `m:r`, `m:rad`, `m:sPre`, `m:sSub`, `m:sSubSup`, `m:sSup`, `w:contentPart`; XSD only: `w:smartTag`
+- `w:CT_Object/w:object`: XSD only: `w:movie`
+- `w:CT_P/w:p`: SDK only: `m:acc`, `m:bar`, `m:borderBox`, `m:box`, `m:d`, `m:eqArr`, `m:f`, `m:func`, `m:groupChr`, `m:limLow`, `m:limUpp`, `m:m`, `m:nary`, `m:phant`, `m:r`, `m:rad`, `m:sPre`, `m:sSub`, `m:sSubSup`, `m:sSup`, `w:contentPart`; XSD only: `w:smartTag`
+- `w:CT_PPrBase/w:pPr`: XSD only: `w:cnfStyle`, `w:divId`
+- `w:CT_PPrGeneral/w:pPr` (SDK: `w:CT_PPrBase`): XSD only: `w:cnfStyle`, `w:divId`, `w:pPrChange`
+- `w:CT_PPrGeneral/w:pPr` (SDK: `w:CT_PPrBaseStyleable`): XSD only: `w:cnfStyle`, `w:divId`, `w:pPrChange`, `w:pStyle`
+- `w:CT_PPrGeneral/w:pPr` (SDK: `w:CT_PPrStyle`): XSD only: `w:cnfStyle`, `w:divId`, `w:pStyle`
+- `w:CT_Picture/w:pict` (SDK: `w:CT_PictureBulletBase`): XSD only: `w:control`, `w:movie`
+- `w:CT_R/w:r`: XSD only: `w:contentPart`
+- `w:CT_RPr/w:rPr`: XSD only: `w:oMath`
+- `w:CT_RPr/w:rPr` (SDK: `w:CT_RPrBaseStyleable`): XSD only: `w:cs`, `w:highlight`, `w:oMath`, `w:rPrChange`, `w:rStyle`, `w:rtl`
+- `w:CT_RPr/w:rPr` (SDK: `w:CT_RPrList`): XSD only: `w:highlight`, `w:oMath`, `w:rPrChange`, `w:rStyle`
+- `w:CT_RPr/w:rPr` (SDK: `w:CT_RPrStyle`): XSD only: `w:cs`, `w:highlight`, `w:oMath`, `w:rStyle`, `w:rtl`
+- `w:CT_RPrOriginal/w:rPr` (SDK: `w:CT_RPr`): SDK only: `w:rPrChange`; XSD only: `w:oMath`
+- `w:CT_RPrOriginal/w:rPr`: XSD only: `w:oMath`
+- `w:CT_Row/w:tr`: SDK only: `w:contentPart`; XSD only: `m:oMath`, `m:oMathPara`
+- `w:CT_RubyContent/w:rt`: SDK only: `m:acc`, `m:bar`, `m:borderBox`, `m:box`, `m:d`, `m:eqArr`, `m:f`, `m:func`, `m:groupChr`, `m:limLow`, `m:limUpp`, `m:m`, `m:nary`, `m:phant`, `m:r`, `m:rad`, `m:sPre`, `m:sSub`, `m:sSubSup`, `m:sSup`, `w:contentPart`, `w:customXml`, `w:fldSimple`, `w:hyperlink`, `w:sdt`
+- `w:CT_RubyContent/w:rubyBase`: SDK only: `m:acc`, `m:bar`, `m:borderBox`, `m:box`, `m:d`, `m:eqArr`, `m:f`, `m:func`, `m:groupChr`, `m:limLow`, `m:limUpp`, `m:m`, `m:nary`, `m:phant`, `m:r`, `m:rad`, `m:sPre`, `m:sSub`, `m:sSubSup`, `m:sSup`, `w:contentPart`, `w:customXml`, `w:fldSimple`, `w:hyperlink`, `w:sdt`
+- `w:CT_RunTrackChange/w:del`: SDK only: `w:contentPart`; XSD only: `w:customXml`, `w:smartTag`
+- `w:CT_RunTrackChange/w:ins`: SDK only: `w:contentPart`; XSD only: `w:customXml`, `w:smartTag`
+- `w:CT_RunTrackChange/w:moveFrom`: SDK only: `w:contentPart`; XSD only: `w:customXml`, `w:smartTag`
+- `w:CT_RunTrackChange/w:moveTo`: SDK only: `w:contentPart`; XSD only: `w:customXml`, `w:smartTag`
+- `w:CT_SdtBlock/w:sdt`: SDK only: `w:bookmarkEnd`, `w:bookmarkStart`, `w:commentRangeEnd`, `w:commentRangeStart`, `w:customXmlDelRangeEnd`, `w:customXmlDelRangeStart`, `w:customXmlInsRangeEnd`, `w:customXmlInsRangeStart`, `w:customXmlMoveFromRangeEnd`, `w:customXmlMoveFromRangeStart`, `w:customXmlMoveToRangeEnd`, `w:customXmlMoveToRangeStart`, `w:moveFromRangeEnd`, `w:moveFromRangeStart`, `w:moveToRangeEnd`, `w:moveToRangeStart`
+- `w:CT_SdtCell/w:sdt`: SDK only: `w:bookmarkEnd`, `w:bookmarkStart`, `w:commentRangeEnd`, `w:commentRangeStart`, `w:customXmlDelRangeEnd`, `w:customXmlDelRangeStart`, `w:customXmlInsRangeEnd`, `w:customXmlInsRangeStart`, `w:customXmlMoveFromRangeEnd`, `w:customXmlMoveFromRangeStart`, `w:customXmlMoveToRangeEnd`, `w:customXmlMoveToRangeStart`, `w:moveFromRangeEnd`, `w:moveFromRangeStart`, `w:moveToRangeEnd`, `w:moveToRangeStart`
+- `w:CT_SdtContentBlock/w:sdtContent`: SDK only: `w:contentPart`; XSD only: `m:oMath`, `m:oMathPara`
+- `w:CT_SdtContentCell/w:sdtContent`: SDK only: `w:contentPart`; XSD only: `m:oMath`, `m:oMathPara`
+- `w:CT_SdtContentRow/w:sdtContent`: SDK only: `w:contentPart`; XSD only: `m:oMath`, `m:oMathPara`
+- `w:CT_SdtContentRun/w:sdtContent`: SDK only: `m:acc`, `m:bar`, `m:borderBox`, `m:box`, `m:d`, `m:eqArr`, `m:f`, `m:func`, `m:groupChr`, `m:limLow`, `m:limUpp`, `m:m`, `m:nary`, `m:phant`, `m:r`, `m:rad`, `m:sPre`, `m:sSub`, `m:sSubSup`, `m:sSup`, `w:contentPart`; XSD only: `w:smartTag`
+- `w:CT_SdtPr/w:sdtPr`: XSD only: `w:label`, `w:tabIndex`
+- `w:CT_SdtRow/w:sdt`: SDK only: `w:bookmarkEnd`, `w:bookmarkStart`, `w:commentRangeEnd`, `w:commentRangeStart`, `w:customXmlDelRangeEnd`, `w:customXmlDelRangeStart`, `w:customXmlInsRangeEnd`, `w:customXmlInsRangeStart`, `w:customXmlMoveFromRangeEnd`, `w:customXmlMoveFromRangeStart`, `w:customXmlMoveToRangeEnd`, `w:customXmlMoveToRangeStart`, `w:moveFromRangeEnd`, `w:moveFromRangeStart`, `w:moveToRangeEnd`, `w:moveToRangeStart`
+- `w:CT_SdtRun/w:sdt`: SDK only: `w:bookmarkEnd`, `w:bookmarkStart`, `w:commentRangeEnd`, `w:commentRangeStart`, `w:customXmlDelRangeEnd`, `w:customXmlDelRangeStart`, `w:customXmlInsRangeEnd`, `w:customXmlInsRangeStart`, `w:customXmlMoveFromRangeEnd`, `w:customXmlMoveFromRangeStart`, `w:customXmlMoveToRangeEnd`, `w:customXmlMoveToRangeStart`, `w:moveFromRangeEnd`, `w:moveFromRangeStart`, `w:moveToRangeEnd`, `w:moveToRangeStart`
+- `w:CT_Settings/w:settings`: SDK only: `w:uiCompat97To2003`; XSD only: `w:doNotEmbedSmartTags`, `w:smartTagType`
+- `w:CT_SimpleField/w:fldSimple`: SDK only: `m:acc`, `m:bar`, `m:borderBox`, `m:box`, `m:d`, `m:eqArr`, `m:f`, `m:func`, `m:groupChr`, `m:limLow`, `m:limUpp`, `m:m`, `m:nary`, `m:phant`, `m:r`, `m:rad`, `m:sPre`, `m:sSub`, `m:sSubSup`, `m:sSup`, `w:contentPart`; XSD only: `w:smartTag`
+- `w:CT_Tbl/w:tbl`: SDK only: `w:contentPart`; XSD only: `m:oMath`, `m:oMathPara`
+- `w:CT_TblPr/w:tblPr`: XSD only: `w:tblStyleColBandSize`, `w:tblStyleRowBandSize`
+- `w:CT_TblPrBase/w:tblPr`: XSD only: `w:tblStyleColBandSize`, `w:tblStyleRowBandSize`
+- `w:CT_TblPrBase/w:tblPr` (SDK: `w:CT_TblPrStyle`): XSD only: `w:bidiVisual`, `w:tblCaption`, `w:tblDescription`, `w:tblLayout`, `w:tblLook`, `w:tblOverlap`, `w:tblStyle`, `w:tblW`, `w:tblpPr`
+- `w:CT_TblPrBase/w:tblPr` (SDK: `w:CT_TblPrStyleOverride`): XSD only: `w:bidiVisual`, `w:tblCaption`, `w:tblDescription`, `w:tblLayout`, `w:tblLook`, `w:tblOverlap`, `w:tblStyle`, `w:tblStyleColBandSize`, `w:tblStyleRowBandSize`, `w:tblW`, `w:tblpPr`
+- `w:CT_Tc/w:tc`: SDK only: `w:contentPart`; XSD only: `m:oMath`, `m:oMathPara`
+- `w:CT_TcPr/w:tcPr`: XSD only: `w:headers`
+- `w:CT_TcPr/w:tcPr` (SDK: `w:CT_TcPrStyle`): XSD only: `w:cellDel`, `w:cellIns`, `w:cellMerge`, `w:cnfStyle`, `w:gridSpan`, `w:hMerge`, `w:headers`, `w:hideMark`, `w:tcBorders`, `w:tcFitText`, `w:tcPrChange`, `w:tcW`, `w:textDirection`, `w:vMerge`
+- `w:CT_TcPr/w:tcPr` (SDK: `w:CT_TcPrStyleOverride`): XSD only: `w:cellDel`, `w:cellIns`, `w:cellMerge`, `w:cnfStyle`, `w:gridSpan`, `w:hMerge`, `w:headers`, `w:hideMark`, `w:tcFitText`, `w:tcPrChange`, `w:tcW`, `w:textDirection`, `w:vMerge`
+- `w:CT_TcPrInner/w:tcPr`: XSD only: `w:headers`
+- `w:CT_TrPr/w:trPr` (SDK: `w:CT_TrPrBaseStyleable`): XSD only: `w:cnfStyle`, `w:del`, `w:divId`, `w:gridAfter`, `w:gridBefore`, `w:ins`, `w:trHeight`, `w:trPrChange`, `w:wAfter`, `w:wBefore`
+- `w:CT_TxbxContent/w:txbxContent`: SDK only: `w:contentPart`; XSD only: `m:oMath`, `m:oMathPara`
+- `w:CT_WebSettings/w:webSettings`: XSD only: `w:saveSmartTagsAsXml`
+- `x:CT_ObjectAnchor/x:anchor`: SDK only: `x:from`, `x:to`; XSD only: `xdr:from`, `xdr:to`
+- `x:CT_ProtectedRange/x:protectedRange`: XSD only: `x:securityDescriptor`
+- `x:CT_Workbook/x:workbook`: XSD only: `x:smartTagPr`, `x:smartTagTypes`
+- `x:CT_Worksheet/x:worksheet`: XSD only: `x:smartTags`
+
+## Same children, different content model
+
+- `a:CT_Table/a:tbl`: SDK `(a:tblPr?, a:tblGrid, a:tr{1,1000})` vs XSD `(a:tblPr?, a:tblGrid, a:tr*)`
+- `a:CT_TableGrid/a:tblGrid`: SDK `a:gridCol{1,1000}` vs XSD `a:gridCol*`
+- `c:CT_DoughnutChart/c:doughnutChart`: SDK `(c:varyColors?, c:ser*, c:dLbls?, c:firstSliceAng?, c:holeSize, c:extLst?)` vs XSD `(c:varyColors?, c:ser*, c:dLbls?, c:firstSliceAng?, c:holeSize?, c:extLst?)`
+- `c:CT_PivotSource/c:pivotSource`: SDK `(c:name, c:fmtId, c:extLst?)` vs XSD `(c:name, c:fmtId, c:extLst*)`
+- `w:CT_DocPartPr/w:docPartPr`: SDK `(w:name?, w:style?, w:category?, w:types?, w:behaviors?, w:description?, w:guid?)` vs XSD `(w:name & w:style? & w:category? & w:types? & w:behaviors? & w:description? & w:guid?)`
+- `w:CT_DocParts/w:docParts`: SDK `w:docPart*` vs XSD `w:docPart+`
+- `w:CT_Drawing/w:drawing`: SDK `(wp:anchor | wp:inline)` vs XSD `(wp:anchor? | wp:inline?)+`
+- `w:CT_MailMerge/w:mailMerge`: SDK `(w:mainDocumentType?, w:linkToQuery?, w:dataType, w:connectString?, w:query?, w:dataSource?, w:headerSource?, w:doNotSuppressBlankLines?, w:destination?, w:addressFieldName?, w:mailSubject?, w:mailAsAttachment?, w:viewMergedData?, w:activeRecord?, w:checkErrors?, w:odso?)` vs XSD `(w:mainDocumentType, w:linkToQuery?, w:dataType, w:connectString?, w:query?, w:dataSource?, w:headerSource?, w:doNotSuppressBlankLines?, w:destination?, w:addressFieldName?, w:mailSubject?, w:mailAsAttachment?, w:viewMergedData?, w:activeRecord?, w:checkErrors?, w:odso?)`
+- `w:CT_MathCtrlIns/w:ins`: SDK `(w:rPr? | w:del)?` vs XSD `(w:del | w:rPr)?`
+- `w:CT_Odso/w:odso`: SDK `(w:udl?, w:table?, w:src?, w:colDelim?, w:type?, w:fHdr?, w:fieldMapData*, w:recipientData?)` vs XSD `(w:udl?, w:table?, w:src?, w:colDelim?, w:type?, w:fHdr?, w:fieldMapData*, w:recipientData*)`
+- `w:CT_OdsoFieldMapData/w:fieldMapData`: SDK `(w:type? & w:name? & w:mappedName? & w:column? & w:lid? & w:dynamicAddress?)` vs XSD `(w:type?, w:name?, w:mappedName?, w:column?, w:lid?, w:dynamicAddress?)`
+- `w:CT_PPr/w:pPr`: SDK `(w:pStyle?, (w:keepNext?, w:keepLines?, w:pageBreakBefore?, w:framePr?, w:widowControl?, w:numPr?, w:suppressLineNumbers?, w:pBdr?, w:shd?, w:tabs?, w:suppressAutoHyphens?, w:kinsoku?, w:wordWrap?, w:overflowPunct?, w:topLinePunct?, w:autoSpaceDE?, w:autoSpaceDN?, w:bidi?, w:adjustRightInd?, w:snapToGrid?, w:spacing?, w:ind?, w:contextualSpacing?, w:mirrorIndents?, w:suppressOverlap?, w:jc?, w:textDirection?, w:textAlignment?, w:textboxTightWrap?, w:outlineLvl?)?, w:divId?, w:cnfStyle?, w:rPr?, w:sectPr?, w:pPrChange?)` vs XSD `(w:pStyle?, w:keepNext?, w:keepLines?, w:pageBreakBefore?, w:framePr?, w:widowControl?, w:numPr?, w:suppressLineNumbers?, w:pBdr?, w:shd?, w:tabs?, w:suppressAutoHyphens?, w:kinsoku?, w:wordWrap?, w:overflowPunct?, w:topLinePunct?, w:autoSpaceDE?, w:autoSpaceDN?, w:bidi?, w:adjustRightInd?, w:snapToGrid?, w:spacing?, w:ind?, w:contextualSpacing?, w:mirrorIndents?, w:suppressOverlap?, w:jc?, w:textDirection?, w:textAlignment?, w:textboxTightWrap?, w:outlineLvl?, w:divId?, w:cnfStyle?, w:rPr?, w:sectPr?, w:pPrChange?)`
+- `w:CT_PPrBase/w:pPr` (SDK: `w:CT_PPrExtended`): SDK `(w:pStyle?, (w:keepNext?, w:keepLines?, w:pageBreakBefore?, w:framePr?, w:widowControl?, w:numPr?, w:suppressLineNumbers?, w:pBdr?, w:shd?, w:tabs?, w:suppressAutoHyphens?, w:kinsoku?, w:wordWrap?, w:overflowPunct?, w:topLinePunct?, w:autoSpaceDE?, w:autoSpaceDN?, w:bidi?, w:adjustRightInd?, w:snapToGrid?, w:spacing?, w:ind?, w:contextualSpacing?, w:mirrorIndents?, w:suppressOverlap?, w:jc?, w:textDirection?, w:textAlignment?, w:textboxTightWrap?, w:outlineLvl?)?, w:divId?, w:cnfStyle?)` vs XSD `(w:pStyle?, w:keepNext?, w:keepLines?, w:pageBreakBefore?, w:framePr?, w:widowControl?, w:numPr?, w:suppressLineNumbers?, w:pBdr?, w:shd?, w:tabs?, w:suppressAutoHyphens?, w:kinsoku?, w:wordWrap?, w:overflowPunct?, w:topLinePunct?, w:autoSpaceDE?, w:autoSpaceDN?, w:bidi?, w:adjustRightInd?, w:snapToGrid?, w:spacing?, w:ind?, w:contextualSpacing?, w:mirrorIndents?, w:suppressOverlap?, w:jc?, w:textDirection?, w:textAlignment?, w:textboxTightWrap?, w:outlineLvl?, w:divId?, w:cnfStyle?)`
+- `w:CT_ParaRPr/w:rPr`: SDK `((w:ins?, w:del?, w:moveFrom?, w:moveTo?)?, ((w:rStyle?, (w:rFonts?, w:b?, w:bCs?, w:i?, w:iCs?, w:caps?, w:smallCaps?, w:strike?, w:dstrike?, w:outline?, w:shadow?, w:emboss?, w:imprint?, w:noProof?, w:snapToGrid?, w:vanish?, w:webHidden?, w:color?, w:spacing?, w:w?, w:kern?, w:position?, w:sz?, w:szCs?)?, w:highlight?, (w:u?, w:effect?, w:bdr?, w:shd?, w:fitText?, w:vertAlign?)?, (w:rtl?, w:cs?)?, (w:em?, w:lang?, w:eastAsianLayout?, w:specVanish?)?)?, w:oMath?)?, w:rPrChange?)` vs XSD `((w:ins?, w:del?, w:moveFrom?, w:moveTo?)?, (w:rStyle | w:rFonts | w:b | w:bCs | w:i | w:iCs | w:caps | w:smallCaps | w:strike | w:dstrike | w:outline | w:shadow | w:emboss | w:imprint | w:noProof | w:snapToGrid | w:vanish | w:webHidden | w:color | w:spacing | w:w | w:kern | w:position | w:sz | w:szCs | w:highlight | w:u | w:effect | w:bdr | w:shd | w:fitText | w:vertAlign | w:rtl | w:cs | w:em | w:lang | w:eastAsianLayout | w:specVanish | w:oMath)*, w:rPrChange?)`
+- `w:CT_ParaRPrOriginal/w:rPr`: SDK `((w:ins?, w:del?, w:moveFrom?, w:moveTo?)?, ((w:rStyle?, (w:rFonts?, w:b?, w:bCs?, w:i?, w:iCs?, w:caps?, w:smallCaps?, w:strike?, w:dstrike?, w:outline?, w:shadow?, w:emboss?, w:imprint?, w:noProof?, w:snapToGrid?, w:vanish?, w:webHidden?, w:color?, w:spacing?, w:w?, w:kern?, w:position?, w:sz?, w:szCs?)?, w:highlight?, (w:u?, w:effect?, w:bdr?, w:shd?, w:fitText?, w:vertAlign?)?, (w:rtl?, w:cs?)?, (w:em?, w:lang?, w:eastAsianLayout?, w:specVanish?)?)?, w:oMath?)*)` vs XSD `((w:ins?, w:del?, w:moveFrom?, w:moveTo?)?, (w:rStyle | w:rFonts | w:b | w:bCs | w:i | w:iCs | w:caps | w:smallCaps | w:strike | w:dstrike | w:outline | w:shadow | w:emboss | w:imprint | w:noProof | w:snapToGrid | w:vanish | w:webHidden | w:color | w:spacing | w:w | w:kern | w:position | w:sz | w:szCs | w:highlight | w:u | w:effect | w:bdr | w:shd | w:fitText | w:vertAlign | w:rtl | w:cs | w:em | w:lang | w:eastAsianLayout | w:specVanish | w:oMath)*)`
+- `w:CT_RPrChange/w:del` (SDK: `w:CT_MathCtrlDel`): SDK `w:rPr?` vs XSD `w:rPr`
+- `w:CT_TblBorders/w:tblBorders`: SDK `(w:top?, w:left?, w:start?, w:bottom?, w:right?, w:end?, w:insideH?, w:insideV?)` vs XSD `(w:top?, w:start?, w:left?, w:bottom?, w:end?, w:right?, w:insideH?, w:insideV?)`
+- `w:CT_TblCellMar/w:tblCellMar`: SDK `(w:top?, w:left?, w:start?, w:bottom?, w:right?, w:end?)` vs XSD `(w:top?, w:start?, w:left?, w:bottom?, w:end?, w:right?)`
+- `w:CT_TcBorders/w:tcBorders`: SDK `(w:top?, w:left?, w:start?, w:bottom?, w:right?, w:end?, w:insideH?, w:insideV?, w:tl2br?, w:tr2bl?)` vs XSD `(w:top?, w:start?, w:left?, w:bottom?, w:end?, w:right?, w:insideH?, w:insideV?, w:tl2br?, w:tr2bl?)`
+- `w:CT_TcMar/w:tcMar`: SDK `(w:top?, w:left?, w:start?, w:bottom?, w:right?, w:end?)` vs XSD `(w:top?, w:start?, w:left?, w:bottom?, w:end?, w:right?)`
+- `w:CT_TrPr/w:trPr`: SDK `(((w:cnfStyle? | w:divId? | w:gridBefore? | w:gridAfter? | w:wBefore? | w:wAfter? | w:trHeight?)* | (w:hidden? | w:cantSplit? | w:tblHeader? | w:tblCellSpacing? | w:jc?)*)+, w:ins?, w:del?, w:trPrChange?)` vs XSD `((w:cnfStyle? | w:divId? | w:gridBefore? | w:gridAfter? | w:wBefore? | w:wAfter? | w:cantSplit? | w:trHeight? | w:tblHeader? | w:tblCellSpacing? | w:jc? | w:hidden?)+, w:ins?, w:del?, w:trPrChange?)`
+- `w:CT_TrPrBase/w:trPr`: SDK `((w:cnfStyle? | w:divId? | w:gridBefore? | w:gridAfter? | w:wBefore? | w:wAfter? | w:trHeight?)* | (w:hidden? | w:cantSplit? | w:tblHeader? | w:tblCellSpacing? | w:jc?)*)+` vs XSD `(w:cnfStyle? | w:divId? | w:gridBefore? | w:gridAfter? | w:wBefore? | w:wAfter? | w:cantSplit? | w:trHeight? | w:tblHeader? | w:tblCellSpacing? | w:jc? | w:hidden?)+`
+- `x:CT_CacheHierarchies/x:cacheHierarchies`: SDK `x:cacheHierarchy+` vs XSD `x:cacheHierarchy*`
+- `x:CT_Dialogsheet/x:dialogsheet`: SDK `(x:sheetPr?, x:sheetViews?, x:sheetFormatPr?, x:sheetProtection?, x:customSheetViews?, x:printOptions?, x:pageMargins?, x:pageSetup?, x:headerFooter?, x:drawing?, x:legacyDrawing, x:legacyDrawingHF?, x:drawingHF?, x:oleObjects?, x:controls?, x:extLst?)` vs XSD `(x:sheetPr?, x:sheetViews?, x:sheetFormatPr?, x:sheetProtection?, x:customSheetViews?, x:printOptions?, x:pageMargins?, x:pageSetup?, x:headerFooter?, x:drawing?, x:legacyDrawing?, x:legacyDrawingHF?, x:drawingHF?, x:oleObjects?, x:controls?, x:extLst?)`
+- `x:CT_ExternalLink/x:externalLink`: SDK `((x:externalBook | x:ddeLink | x:oleLink), x:extLst?)` vs XSD `((x:externalBook? | x:ddeLink? | x:oleLink?), x:extLst?)`
+- `x:CT_FieldGroup/x:fieldGroup`: SDK `((x:rangePr? | x:discretePr?), x:groupItems?)` vs XSD `(x:rangePr?, x:discretePr?, x:groupItems?)`
+- `x:CT_Fills/x:fills`: SDK `x:fill{1,65430}` vs XSD `x:fill*`
+- `x:CT_Filters/x:filters`: SDK `(x:filter* | x:dateGroupItem*)` vs XSD `(x:filter*, x:dateGroupItem*)`
+- `x:CT_Font/x:font` (known: overrides.py): SDK `(unordered: overrides.py)` vs XSD `(x:name? | x:charset? | x:family? | x:b? | x:i? | x:strike? | x:outline? | x:shadow? | x:condense? | x:extend? | x:color? | x:sz? | x:u? | x:vertAlign? | x:scheme?)+`
+- `x:CT_FunctionGroups/x:functionGroups`: SDK `(x:functionGroup{0,255})+` vs XSD `(x:functionGroup?)+`
+- `x:CT_RPrElt/x:rPr` (known: overrides.py): SDK `(unordered: overrides.py)` vs XSD `(x:rFont? | x:charset? | x:family? | x:b? | x:i? | x:strike? | x:outline? | x:shadow? | x:condense? | x:extend? | x:color? | x:sz? | x:u? | x:vertAlign? | x:scheme?)+`
+- `a:CT_ColorMRU/p:clrMru` (limits only): SDK `(a:scrgbClr | a:srgbClr | a:hslClr | a:sysClr | a:schemeClr | a:prstClr){0,10}` vs XSD `(a:scrgbClr | a:srgbClr | a:hslClr | a:sysClr | a:schemeClr | a:prstClr)*`
+- `c:CT_PlotArea/c:plotArea` (limits only): SDK `(c:layout?, (c:areaChart | c:area3DChart | c:lineChart | c:line3DChart | c:stockChart | c:radarChart | c:scatterChart | c:pieChart | c:pie3DChart | c:doughnutChart | c:barChart | c:bar3DChart | c:ofPieChart | c:surfaceChart | c:surface3DChart | c:bubbleChart)+, (c:valAx | c:catAx | c:dateAx | c:serAx){0,4}, c:dTable?, c:spPr?, c:extLst?)` vs XSD `(c:layout?, (c:areaChart | c:area3DChart | c:lineChart | c:line3DChart | c:stockChart | c:radarChart | c:scatterChart | c:pieChart | c:pie3DChart | c:doughnutChart | c:barChart | c:bar3DChart | c:ofPieChart | c:surfaceChart | c:surface3DChart | c:bubbleChart)+, (c:valAx | c:catAx | c:dateAx | c:serAx)*, c:dTable?, c:spPr?, c:extLst?)`
+- `m:CT_D/m:d` (limits only): SDK `(m:dPr?, m:e{1,64})` vs XSD `(m:dPr?, m:e+)`
+- `m:CT_EqArr/m:eqArr` (limits only): SDK `(m:eqArrPr?, m:e{1,64})` vs XSD `(m:eqArrPr?, m:e+)`
+- `m:CT_M/m:m` (limits only): SDK `(m:mPr?, m:mr{1,256})` vs XSD `(m:mPr?, m:mr+)`
+- `m:CT_MCS/m:mcs` (limits only): SDK `m:mc{1,64}` vs XSD `m:mc+`
+- `m:CT_MR/m:mr` (limits only): SDK `m:e{1,64}` vs XSD `m:e+`
+- `v:CT_Formulas/v:formulas` (limits only): SDK `v:f{0,128}` vs XSD `v:f*`
+- `v:CT_Handles/v:handles` (limits only): SDK `v:h{0,4}` vs XSD `v:h*`
+- `w:CT_FFDDList/w:ddList` (limits only): SDK `(w:result?, w:default?, w:listEntry{0,25})` vs XSD `(w:result?, w:default?, w:listEntry*)`
+- `x:CT_Borders/x:borders` (limits only): SDK `x:border{0,65430}` vs XSD `x:border*`
+- `x:CT_CellStyleXfs/x:cellStyleXfs` (limits only): SDK `x:xf{1,65430}` vs XSD `x:xf+`
+- `x:CT_CellStyles/x:cellStyles` (limits only): SDK `x:cellStyle{1,65430}` vs XSD `x:cellStyle+`
+- `x:CT_CellXfs/x:cellXfs` (limits only): SDK `x:xf{1,65430}` vs XSD `x:xf+`
+- `x:CT_ColHierarchiesUsage/x:colHierarchiesUsage` (limits only): SDK `x:colHierarchyUsage{1,16384}` vs XSD `x:colHierarchyUsage+`
+- `x:CT_ColorScale/x:colorScale` (limits only): SDK `(x:cfvo{2,3}, x:color{2,3})` vs XSD `(x:cfvo{2,}, x:color{2,})`
+- `x:CT_Controls/x:controls` (limits only): SDK `x:control{1,65535}` vs XSD `x:control+`
+- `x:CT_DataValidations/x:dataValidations` (limits only): SDK `x:dataValidation{1,65534}` vs XSD `x:dataValidation+`
+- `x:CT_ExternalReferences/x:externalReferences` (limits only): SDK `x:externalReference{1,65534}` vs XSD `x:externalReference+`
+- `x:CT_ExternalSheetNames/x:sheetNames` (limits only): SDK `x:sheetName{1,65534}` vs XSD `x:sheetName+`
+- `x:CT_Fonts/x:fonts` (limits only): SDK `x:font{0,65491}` vs XSD `x:font*`
+- `x:CT_IgnoredErrors/x:ignoredErrors` (limits only): SDK `(x:ignoredError{1,9}, x:extLst?)` vs XSD `(x:ignoredError+, x:extLst?)`
+- `x:CT_IndexedColors/x:indexedColors` (limits only): SDK `x:rgbColor{1,64}` vs XSD `x:rgbColor+`
+- `x:CT_MRUColors/x:mruColors` (limits only): SDK `x:color{1,10}` vs XSD `x:color+`
+- `x:CT_OleObjects/x:oleObjects` (limits only): SDK `x:oleObject{1,65535}` vs XSD `x:oleObject+`
+- `x:CT_PageFields/x:pageFields` (limits only): SDK `x:pageField{1,256}` vs XSD `x:pageField+`
+- `x:CT_Rst/x:is` (limits only): SDK `(x:t?, x:r{0,32767}, x:rPh{0,32767}, x:phoneticPr?)` vs XSD `(x:t?, x:r*, x:rPh*, x:phoneticPr?)`
+- `x:CT_Rst/x:si` (limits only): SDK `(x:t?, x:r{0,32767}, x:rPh{0,32767}, x:phoneticPr?)` vs XSD `(x:t?, x:r*, x:rPh*, x:phoneticPr?)`
+- `x:CT_Rst/x:text` (limits only): SDK `(x:t?, x:r{0,32767}, x:rPh{0,32767}, x:phoneticPr?)` vs XSD `(x:t?, x:r*, x:rPh*, x:phoneticPr?)`
+- `x:CT_Scenario/x:scenario` (limits only): SDK `x:inputCells{1,32}` vs XSD `x:inputCells+`
+- `x:CT_SheetIdMap/x:sheetIdMap` (limits only): SDK `x:sheetId{1,65535}` vs XSD `x:sheetId+`
+- `x:CT_Sheets/x:sheets` (limits only): SDK `x:sheet{1,32767}` vs XSD `x:sheet+`
+- `x:CT_TableStyle/x:tableStyle` (limits only): SDK `x:tableStyleElement{0,28}` vs XSD `x:tableStyleElement*`
+- `x:CT_TextFields/x:textFields` (limits only): SDK `x:textField{1,2001}` vs XSD `x:textField+`
+- `x:CT_colItems/x:colItems` (limits only): SDK `x:i{1,1048576}` vs XSD `x:i+`
+
+## Attributes on one side only
+
+- `a:CT_AudioFile/a:audioFile`: XSD only: `contentType`
+- `a:CT_BlipFillProperties/xdr:blipFill` (SDK: `a:CT_BlipFillProperties2`): XSD only: `dpi`
+- `a:CT_EmbeddedWAVAudioFile/a:snd`: SDK only: `builtIn`
+- `a:CT_EmbeddedWAVAudioFile/a:wavAudioFile`: SDK only: `builtIn`
+- `a:CT_EmbeddedWAVAudioFile/p:snd`: SDK only: `builtIn`
+- `a:CT_EmbeddedWAVAudioFile/p:sndTgt`: SDK only: `builtIn`
+- `a:CT_TableCell/a:tc`: XSD only: `id`
+- `a:CT_VideoFile/a:videoFile`: XSD only: `contentType`
+- `c:CT_ChartSpace/c:chartSpace`: SDK only: `fallbackImg`, `featureList`, `version`
+- `c:CT_Extension/c:ext` (SDK: `c16r3:CT_DataDisplayOptions16`): XSD only: `uri`
+- `c:CT_PageSetup/c:pageSetup`: XSD only: `paperHeight`, `paperWidth`
+- `m:CT_ManualBreak/m:brk`: SDK only: `m:val`
+- `o:CT_Extrusion/o:extrusion`: XSD only: `colormode`, `plane`
+- `o:CT_Ink/o:ink`: XSD only: `contentType`
+- `o:CT_ShapeDefaults/o:shapedefaults`: SDK only: `o:allowoverlap`, `o:insetmode`
+- `p:CT_ExtensionListModify/p:extLst` (SDK: `p:CT_CommentExtensionList`): XSD only: `mod` (and 5 more SDK types: `p:CT_HandoutMasterExtensionList`, `p:CT_NotesMasterExtensionList`, `p:CT_SlideExtensionList`, `p:CT_SlideLayoutExtensionList`, `p:CT_SlideMasterExtensionList`)
+- `p:CT_GraphicalObjectFrame/p:graphicFrame`: XSD only: `bwMode`
+- `p:CT_HtmlPublishProperties/p:htmlPubPr`: SDK only: `pubBrowser`; XSD only: `target`, `title`
+- `sl:CT_Schema/sl:schema`: XSD only: `sl:schemaLanguage`
+- `v:CT_Arc/v:arc`: SDK only: `endangle`, `o:gfxdata`, `startangle`; XSD only: `chromakey`, `class`, `endAngle`, `opacity`, `startAngle`
+- `v:CT_Background/v:background`: SDK only: `fill`; XSD only: `filled`
+- `v:CT_Curve/v:curve`: SDK only: `o:gfxdata`; XSD only: `chromakey`, `opacity`
+- `v:CT_Fill/v:fill`: XSD only: `o:relid`
+- `v:CT_Group/v:group`: SDK only: `o:gfxdata`; XSD only: `fillcolor`, `filled`, `o:borderbottomcolor`, `o:borderleftcolor`, `o:borderrightcolor`, `o:bordertopcolor`
+- `v:CT_Image/v:image`: SDK only: `o:gfxdata`; XSD only: `chromakey`, `coordorigin`, `opacity`
+- `v:CT_ImageData/v:imagedata`: XSD only: `o:althref`, `o:href`, `o:movie`, `o:oleid`, `src`
+- `v:CT_Line/v:line`: SDK only: `o:gfxdata`; XSD only: `chromakey`, `opacity`
+- `v:CT_Oval/v:oval`: SDK only: `o:gfxdata`; XSD only: `chromakey`, `opacity`
+- `v:CT_PolyLine/v:polyline`: SDK only: `o:gfxdata`; XSD only: `chromakey`, `opacity`
+- `v:CT_Rect/v:rect`: SDK only: `o:gfxdata`; XSD only: `chromakey`, `opacity`
+- `v:CT_RoundRect/v:roundrect`: SDK only: `o:gfxdata`; XSD only: `chromakey`, `coordorigin`, `opacity`
+- `v:CT_Shape/v:shape`: XSD only: `chromakey`, `opacity`
+- `v:CT_Shapetype/v:shapetype`: XSD only: `chromakey`, `opacity`
+- `v:CT_Stroke/v:stroke`: XSD only: `o:relid`
+- `v:CT_Textbox/v:textbox`: XSD only: `o:insetmode`
+- `vt:CT_Array/vt:array`: SDK only: `lBound`, `uBound`; XSD only: `lBounds`, `uBounds`
+- `w:CT_BottomPageBorder/w:bottom` (SDK: `w:CT_Border`): XSD only: `r:bottomLeft`, `r:bottomRight`, `r:id`
+- `w:CT_CustomXmlBlock/w:customXml`: XSD only: `w:element`, `w:uri`
+- `w:CT_CustomXmlCell/w:customXml`: XSD only: `w:element`, `w:uri`
+- `w:CT_CustomXmlRow/w:customXml`: XSD only: `w:element`, `w:uri`
+- `w:CT_CustomXmlRun/w:customXml`: XSD only: `w:element`, `w:uri`
+- `w:CT_Document/w:document`: XSD only: `mc:Ignorable`
+- `w:CT_Num/w:num`: SDK only: `w:durableId`
+- `w:CT_OptimizeForBrowser/w:optimizeForBrowser` (SDK: `w:CT_OnOff`): XSD only: `w:target`
+- `w:CT_PageBorder/w:left` (SDK: `w:CT_Border`): XSD only: `r:id`
+- `w:CT_PageBorder/w:right` (SDK: `w:CT_Border`): XSD only: `r:id`
+- `w:CT_Tc/w:tc`: XSD only: `w:id`
+- `w:CT_Text/w:fldData` (SDK: `w:CT_Base64BinaryText`): XSD only: `xml:space`
+- `w:CT_TopPageBorder/w:top` (SDK: `w:CT_Border`): XSD only: `r:id`, `r:topLeft`, `r:topRight`
+- `x:CT_CalcCell/x:c`: XSD only: `ref`
+- `x:CT_CellAlignment/x:alignment`: SDK only: `mergeCell`
+- `x:CT_CellFormula/x:f`: SDK only: `xml:space`
+- `x:CT_CommentPr/x:commentPr`: SDK only: `colHidden`, `rowHidden`, `uiObject`
+- `x:CT_CsPageSetup/x:pageSetup`: XSD only: `paperHeight`, `paperWidth`
+- `x:CT_ObjectAnchor/x:anchor`: SDK only: `z-order`
+- `x:CT_PCDKPI/x:kpi`: XSD only: `time`
+- `x:CT_PageSetup/x:pageSetup`: XSD only: `paperHeight`, `paperWidth`
+- `x:CT_Schema/x:Schema`: XSD only: `SchemaLanguage`
+- `x:CT_TableFormula/x:calculatedColumnFormula`: SDK only: `xml:space`
+- `x:CT_TableFormula/x:totalsRowFormula`: SDK only: `xml:space`
+- `x:CT_WorkbookPr/x:workbookPr`: SDK only: `dateCompatibility`
+- `x:CT_WorkbookProtection/x:workbookProtection`: XSD only: `revisionsPasswordCharacterSet`, `workbookPasswordCharacterSet`
+- `xdr:CT_Rel/xdr:contentPart` (SDK: `xdr14:CT_ContentPart`): SDK only: `bwMode`
+- `xsd:string/x:author` (SDK: `x:CT_Xstring`): SDK only: `xml:space`
+- `xsd:string/x:evenFooter` (SDK: `x:CT_Xstring`): SDK only: `xml:space`
+- `xsd:string/x:evenHeader` (SDK: `x:CT_Xstring`): SDK only: `xml:space`
+- `xsd:string/x:firstFooter` (SDK: `x:CT_Xstring`): SDK only: `xml:space`
+- `xsd:string/x:firstHeader` (SDK: `x:CT_Xstring`): SDK only: `xml:space`
+- `xsd:string/x:formula` (SDK: `x:CT_Xstring`): SDK only: `xml:space`
+- `xsd:string/x:formula1` (SDK: `x:CT_Xstring`): SDK only: `xml:space`
+- `xsd:string/x:formula2` (SDK: `x:CT_Xstring`): SDK only: `xml:space`
+- `xsd:string/x:oddFooter` (SDK: `x:CT_Xstring`): SDK only: `xml:space`
+- `xsd:string/x:oddHeader` (SDK: `x:CT_Xstring`): SDK only: `xml:space`
+- `xsd:string/x:oldFormula` (SDK: `x:CT_Xstring`): SDK only: `xml:space`
+- `xsd:string/x:stp` (SDK: `x:CT_Xstring`): SDK only: `xml:space`
+- `xsd:string/x:t` (SDK: `x:CT_Xstring`): SDK only: `xml:space`
+- `xsd:string/x:v` (SDK: `x:CT_Xstring`): SDK only: `xml:space`
+- `xsd:string/x:val` (SDK: `x:CT_Xstring`): SDK only: `xml:space`
+
+## Required on one side only
+
+- `a:CT_EffectReference/a:effect` `ref`: required only in the XSD
+- `a:CT_OfficeArtExtension/a:ext` `uri`: required only in the XSD
+- `a:CT_TextFont/a:buFont` `typeface`: required only in the XSD
+- `a:CT_TextFont/a:cs` `typeface`: required only in the XSD
+- `a:CT_TextFont/a:ea` `typeface`: required only in the XSD
+- `a:CT_TextFont/a:latin` `typeface`: required only in the XSD
+- `a:CT_TextFont/a:sym` `typeface`: required only in the XSD
+- `a:CT_TextFont/p:font` `typeface`: required only in the XSD
+- `c:CT_BarDir/c:barDir` `val`: required only in the SDK
+- `c:CT_ErrBarType/c:errBarType` `val`: required only in the SDK
+- `c:CT_ErrValType/c:errValType` `val`: required only in the SDK
+- `c:CT_Extension/c:ext` (SDK: `c:CT_Area3DChartExtension`) `uri`: required only in the SDK (and 32 more SDK types: `c:CT_AreaChartExtension`, `c:CT_AreaSerExtension`, `c:CT_Bar3DChartExtension`, `c:CT_BarChartExtension`, `c:CT_BarSerExtension`, `c:CT_BubbleChartExtension` …)
+- `c:CT_HoleSize/c:holeSize` `val`: required only in the SDK
+- `c:CT_OfPieType/c:ofPieType` `val`: required only in the SDK
+- `c:CT_Order/c:order` `val`: required only in the SDK
+- `c:CT_Period/c:period` `val`: required only in the SDK
+- `c:CT_RadarStyle/c:radarStyle` `val`: required only in the SDK
+- `c:CT_SplitType/c:splitType` `val`: required only in the SDK
+- `c:CT_Style/c:style` `val`: required only in the XSD
+- `c:CT_Thickness/c:thickness` (SDK: `c:CT_WallThickness`) `val`: required only in the XSD
+- `dgm:CT_Parameter/dgm:param` `val`: required only in the XSD
+- `m:CT_OMathJc/m:defJc` `m:val`: required only in the SDK
+- `m:CT_OMathJc/m:jc` `m:val`: required only in the SDK
+- `m:CT_Script/m:scr` `m:val`: required only in the SDK
+- `m:CT_String/m:mathFont` (SDK: `m:CT_FontFace`) `m:val`: required only in the SDK
+- `m:CT_Style/m:sty` `m:val`: required only in the SDK
+- `o:CT_Proxy/o:proxy` `connectloc`: required only in the SDK
+- `o:CT_Proxy/o:proxy` `idref`: required only in the SDK
+- `vt:CT_Vstream/vt:vstream` `version`: required only in the SDK
+- `w:CT_CompatSetting/w:compatSetting` `w:name`: required only in the SDK
+- `w:CT_CompatSetting/w:compatSetting` `w:uri`: required only in the SDK
+- `w:CT_CompatSetting/w:compatSetting` `w:val`: required only in the SDK
+- `w:CT_PageMar/w:pgMar` `w:bottom`: required only in the XSD
+- `w:CT_PageMar/w:pgMar` `w:footer`: required only in the XSD
+- `w:CT_PageMar/w:pgMar` `w:gutter`: required only in the XSD
+- `w:CT_PageMar/w:pgMar` `w:header`: required only in the XSD
+- `w:CT_PageMar/w:pgMar` `w:left`: required only in the XSD
+- `w:CT_PageMar/w:pgMar` `w:right`: required only in the XSD
+- `w:CT_PageMar/w:pgMar` `w:top`: required only in the XSD
+- `w:CT_ReadingModeInkLockDown/w:readModeInkLockDown` `w:actualPg`: required only in the XSD
+- `w:CT_SectType/w:type` `w:val`: required only in the SDK
+- `w:CT_TblWidth/w:left` (SDK: `w:CT_TblWidthDxaNil`) `w:type`: required only in the SDK
+- `w:CT_TblWidth/w:left` (SDK: `w:CT_TblWidthDxaNil`) `w:w`: required only in the SDK
+- `w:CT_TblWidth/w:right` (SDK: `w:CT_TblWidthDxaNil`) `w:type`: required only in the SDK
+- `w:CT_TblWidth/w:right` (SDK: `w:CT_TblWidthDxaNil`) `w:w`: required only in the SDK
+- `w:CT_Zoom/w:zoom` `w:percent`: required only in the XSD
+- `x:CT_CalcCell/x:c` `r`: required only in the SDK
+- `x:CT_Cell/x:nc` (SDK: `x:CT_NewCell`) `r`: required only in the SDK
+- `x:CT_CfRule/x:cfRule` `type`: required only in the SDK
+- `x:CT_ColorFilter/x:colorFilter` `dxfId`: required only in the SDK
+- `x:CT_CustomWorkbookView/x:customWorkbookView` `windowHeight`: required only in the XSD
+- `x:CT_CustomWorkbookView/x:customWorkbookView` `windowWidth`: required only in the XSD
+- `x:CT_Extension/x:ext` (SDK: `x:CT_CacheFieldExtension`) `uri`: required only in the SDK (and 17 more SDK types: `x:CT_CacheHierarchyExtension`, `x:CT_CacheSourceExtension`, `x:CT_CalculatedMemberExtension`, `x:CT_CfRuleExtension`, `x:CT_ConnectionExtension`, `x:CT_DataFieldExtension` …)
+- `x:CT_ExternalCell/x:cell` `r`: required only in the SDK
+- `x:CT_Filter/x:filter` `val`: required only in the SDK
+- `x:CT_FunctionGroup/x:functionGroup` `name`: required only in the SDK
+- `x:CT_MeasureDimensionMap/x:map` `dimension`: required only in the SDK
+- `x:CT_MeasureDimensionMap/x:map` `measureGroup`: required only in the SDK
+- `x:CT_PCDKPI/x:kpi` `caption`: required only in the SDK
+- `x:CT_PivotSelection/x:pivotSelection` `r:id`: required only in the SDK
+- `x:CT_XmlCellPr/x:xmlCellPr` `uniqueName`: required only in the SDK
+
+## Enumeration values differ
+
+- `a:CT_TableCellProperties/a:tcPr` `anchor` (`a:ST_TextAnchoringType` / `a:ST_TextAnchoringType`): XSD only: dist, just (and 1 more elements: `a:bodyPr`)
+- `c:CT_ScatterStyle/c:scatterStyle` `val` (`c:ST_ScatterStyle` / `c:ST_ScatterStyle`): XSD only: none
+- `c:CT_SplitType/c:splitType` `val` (`c:ST_SplitType` / `c:ST_SplitType`): XSD only: auto
+- `m:CT_XAlign/m:mcJc` `m:val` (`m:ST_XAlign` / `s:ST_XAlign`): XSD only: inside, outside
+- `m:CT_YAlign/m:baseJc` `m:val` (`m:ST_YAlign` / `s:ST_YAlign`): SDK only: bot; XSD only: inline, inside, outside
+- `o:CT_R/o:r` `type` (`o:ST_RType` / `o:ST_RType`): XSD only: align
+- `p:CT_ModifyVerifier/p:modifyVerifier` `cryptAlgorithmClass` (`p:ST_AlgClass` / `s:ST_AlgClass`): SDK only: invalid; XSD only: custom
+- `p:CT_ModifyVerifier/p:modifyVerifier` `cryptAlgorithmType` (`p:ST_AlgType` / `s:ST_AlgType`): SDK only: invalid; XSD only: custom
+- `p:CT_ModifyVerifier/p:modifyVerifier` `cryptProviderType` (`p:ST_CryptProv` / `s:ST_CryptProv`): SDK only: invalid; XSD only: custom
+- `p:CT_TLCommonTimeNodeData/p:cTn` `masterRel` (`p:ST_TLTimeNodeMasterRelation` / `p:ST_TLTimeNodeMasterRelation`): XSD only: lastClick
+- `p:CT_TLCommonTimeNodeData/p:cTn` `syncBehavior` (`p:ST_TLTimeNodeSyncType` / `p:ST_TLTimeNodeSyncType`): SDK only: none
+- `p:CT_TLTimeCondition/p:cond` `evt` (`p:ST_TLTriggerEvent` / `p:ST_TLTriggerEvent`): SDK only: none, onMediaBookmark (and 1 more elements: `p:endSync`)
+- `v:CT_Arc/v:arc` `o:bwmode` (`o:ST_BWMode` / `o:ST_BWMode`): SDK only: lightGrayScale; XSD only: hide, lightGrayscale (and 10 more elements: `v:background`, `v:curve`, `v:image`, `v:line`, `v:oval`, `v:polyline` …)
+- `v:CT_Arc/v:arc` `o:bwnormal` (`o:ST_BWMode` / `o:ST_BWMode`): SDK only: lightGrayScale; XSD only: hide, lightGrayscale (and 10 more elements: `v:background`, `v:curve`, `v:image`, `v:line`, `v:oval`, `v:polyline` …)
+- `v:CT_Arc/v:arc` `o:bwpure` (`o:ST_BWMode` / `o:ST_BWMode`): SDK only: lightGrayScale; XSD only: hide, lightGrayscale (and 10 more elements: `v:background`, `v:curve`, `v:image`, `v:line`, `v:oval`, `v:polyline` …)
+- `v:CT_Shadow/v:shadow` `type` (`v:ST_ShadowType` / `v:ST_ShadowType`): SDK only: drawingRelative, shapeRelative
+- `v:CT_Stroke/v:stroke` `filltype` (`v:ST_StrokeFillType` / `v:ST_FillType`): XSD only: gradient, gradientRadial
+- `vt:CT_Vector/vt:vector` `baseType` (`vt:ST_VectorBaseType` / `vt:ST_VectorBaseType`): SDK only: cf
+- `w10:CT_Wrap/w10:wrap` `anchorx` (`w10:ST_HorizontalAnchor` / `w10:ST_HorizontalAnchor`): XSD only: char
+- `w10:CT_Wrap/w10:wrap` `anchory` (`w10:ST_VerticalAnchor` / `w10:ST_VerticalAnchor`): XSD only: line
+- `w:CT_Border/w:bar` `w:val` (`w:ST_Border` / `w:ST_Border`): SDK only: tribal1, tribal2, tribal3, tribal4, tribal5, tribal6; XSD only: custom, earth3 (and 16 more elements: `w:bdr`, `w:between`, `w:bottom`, `w:end`, `w:insideH`, `w:insideV` …)
+- `w:CT_CalendarType/w:calendar` `w:val` (`w:ST_CalendarType` / `s:ST_CalendarType`): SDK only: umalqura
+- `w:CT_Caption/w:caption` `w:pos` (`w:ST_CaptionPos` / `w:ST_CaptionPos`): XSD only: left, right
+- `w:CT_Fonts/w:rFonts` `w:hint` (`w:ST_Hint` / `w:ST_Hint`): SDK only: cs
+- `w:CT_FtnPos/w:pos` `w:val` (`w:ST_FtnPos` / `w:ST_FtnPos`): XSD only: docEnd
+- `w:CT_Jc/w:lvlJc` (SDK: `w:CT_LevelJustification`) `w:val` (`w:ST_LevelJustification` / `w:ST_Jc`): XSD only: both, distribute, end, highKashida, lowKashida, mediumKashida, numTab, start, thaiDistribute
+- `w:CT_JcTable/w:jc` (SDK: `w:CT_TblJc`) `w:val` (`w:ST_TblJc` / `w:ST_JcTable`): XSD only: end, start
+- `w:CT_OnOff/w:autoRedefine` (SDK: `w:CT_OnOffOnly`) `w:val` (`w:ST_OnOffOnly` / `s:ST_OnOff`): XSD only: 0, 1, false, true (and 18 more elements: `w:bidiVisual`, `w:cantSplit`, `w:flatBorders`, `w:hidden`, `w:hideMark`, `w:linkedToFile` …)
+- `w:CT_TblWidth/w:left` (SDK: `w:CT_TblWidthDxaNil`) `w:type` (`w:ST_TblWidthDxaNil` / `w:ST_TblWidth`): XSD only: auto, pct (and 1 more elements: `w:right`)
+- `w:CT_VerticalJc/w:vAlign` (SDK: `w:CT_VerticalTblJc`) `w:val` (`w:ST_VerticalTblJc` / `w:ST_VerticalJc`): XSD only: both
+- `x:CT_Cell/x:c` `t` (`x:ST_CellType` / `x:ST_CellType`): SDK only: d (and 3 more elements: `x:nc`, `x:oc`, `x:cell`)
+- `x:CT_Connection/x:connection` `credentials` (`x:ST_CredMethod` / `x:ST_CredMethod`): XSD only: prompt
+- `x:CT_Filters/x:filters` `calendarType` (`x:ST_CalendarType` / `s:ST_CalendarType`): XSD only: saka
+- `x:CT_Format/x:format` `action` (`x:ST_FormatAction` / `x:ST_FormatAction`): XSD only: drill, formula
+- `x:CT_TextPr/x:textPr` `fileType` (`x:ST_FileType` / `x:ST_FileType`): XSD only: lin, other
+
+## Simple content on one side only
+
+- `x:CT_Schema/x:Schema`: text in XSD only
+
+## Paired through context, different type names
+
+- `a:CT_BlipFillProperties/xdr:blipFill` (XSD) = `a:CT_BlipFillProperties2/xdr:blipFill` (SDK)
+- `a:CT_Boolean/a:rtl` (XSD) = `a:CT_Bool/a:rtl` (SDK)
+- `a:CT_Color/a:accent1` (XSD) = `a:CT_Color2/a:accent1` (SDK)
+- `a:CT_Color/a:accent2` (XSD) = `a:CT_Color2/a:accent2` (SDK)
+- `a:CT_Color/a:accent3` (XSD) = `a:CT_Color2/a:accent3` (SDK)
+- `a:CT_Color/a:accent4` (XSD) = `a:CT_Color2/a:accent4` (SDK)
+- `a:CT_Color/a:accent5` (XSD) = `a:CT_Color2/a:accent5` (SDK)
+- `a:CT_Color/a:accent6` (XSD) = `a:CT_Color2/a:accent6` (SDK)
+- `a:CT_Color/a:dk1` (XSD) = `a:CT_Color2/a:dk1` (SDK)
+- `a:CT_Color/a:dk2` (XSD) = `a:CT_Color2/a:dk2` (SDK)
+- `a:CT_Color/a:folHlink` (XSD) = `a:CT_Color2/a:folHlink` (SDK)
+- `a:CT_Color/a:hlink` (XSD) = `a:CT_Color2/a:hlink` (SDK)
+- `a:CT_Color/a:lt1` (XSD) = `a:CT_Color2/a:lt1` (SDK)
+- `a:CT_Color/a:lt2` (XSD) = `a:CT_Color2/a:lt2` (SDK)
+- `a:CT_Color/p:from` (XSD) = `a:CT_Color3/p:from` (SDK)
+- `a:CT_Color/p:to` (XSD) = `a:CT_Color3/p:to` (SDK)
+- `a:CT_NonVisualDrawingProps/xdr:cNvPr` (XSD) = `a:CT_SpreadSheetNonVisualDrawingProps/xdr:cNvPr` (SDK)
+- `a:CT_OfficeArtExtension/a:ext` (XSD) = `a:CT_BlipExtension/a:ext` (SDK)
+- `a:CT_OfficeArtExtension/a:ext` (XSD) = `a:CT_ConnectorLockingExtension/a:ext` (SDK)
+- `a:CT_OfficeArtExtension/a:ext` (XSD) = `a:CT_DataModelExtension/a:ext` (SDK)
+- `a:CT_OfficeArtExtension/a:ext` (XSD) = `a:CT_GvmlGroupShapeExtension/a:ext` (SDK)
+- `a:CT_OfficeArtExtension/a:ext` (XSD) = `a:CT_HyperlinkExtension/a:ext` (SDK)
+- `a:CT_OfficeArtExtension/a:ext` (XSD) = `a:CT_LinePropertiesExtension/a:ext` (SDK)
+- `a:CT_OfficeArtExtension/a:ext` (XSD) = `a:CT_NonVisualDrawingPropsExtension/a:ext` (SDK)
+- `a:CT_OfficeArtExtension/a:ext` (XSD) = `a:CT_NonVisualGroupDrawingShapePropsExtension/a:ext` (SDK)
+- `a:CT_OfficeArtExtension/a:ext` (XSD) = `a:CT_NonVisualPicturePropertiesExtension/a:ext` (SDK)
+- `a:CT_OfficeArtExtension/a:ext` (XSD) = `a:CT_OfficeStyleSheetExtension/a:ext` (SDK)
+- `a:CT_OfficeArtExtension/a:ext` (XSD) = `a:CT_PtExtension/a:ext` (SDK)
+- `a:CT_OfficeArtExtension/a:ext` (XSD) = `a:CT_ShapePropertiesExtension/a:ext` (SDK)
+- `a:CT_OfficeArtExtensionList/a:extLst` (XSD) = `a:CT_BlipExtensionList/a:extLst` (SDK)
+- `a:CT_OfficeArtExtensionList/a:extLst` (XSD) = `a:CT_ConnectorLockingExtensionList/a:extLst` (SDK)
+- `a:CT_OfficeArtExtensionList/a:extLst` (XSD) = `a:CT_GvmlGroupShapeExtensionList/a:extLst` (SDK)
+- `a:CT_OfficeArtExtensionList/a:extLst` (XSD) = `a:CT_HyperlinkExtensionList/a:extLst` (SDK)
+- `a:CT_OfficeArtExtensionList/a:extLst` (XSD) = `a:CT_LinePropertiesExtensionList/a:extLst` (SDK)
+- `a:CT_OfficeArtExtensionList/a:extLst` (XSD) = `a:CT_NonVisualDrawingPropsExtensionList/a:extLst` (SDK)
+- `a:CT_OfficeArtExtensionList/a:extLst` (XSD) = `a:CT_NonVisualGroupDrawingShapePropsExtensionList/a:extLst` (SDK)
+- `a:CT_OfficeArtExtensionList/a:extLst` (XSD) = `a:CT_NonVisualPicturePropertiesExtensionList/a:extLst` (SDK)
+- `a:CT_OfficeArtExtensionList/a:extLst` (XSD) = `a:CT_OfficeStyleSheetExtensionList/a:extLst` (SDK)
+- `a:CT_OfficeArtExtensionList/a:extLst` (XSD) = `a:CT_ShapePropertiesExtensionList/a:extLst` (SDK)
+- `a:CT_OfficeArtExtensionList/dgm:extLst` (XSD) = `a:CT_DataModelExtensionList/dgm:extLst` (SDK)
+- `a:CT_OfficeArtExtensionList/dgm:extLst` (XSD) = `a:CT_PtExtensionList/dgm:extLst` (SDK)
+- `a:CT_OfficeArtExtensionList/dgm:extLst` (XSD) = `dgm:CT_DiagramDefinitionExtensionList/dgm:extLst` (SDK)
+- `a:CT_ShapeProperties/c:spPr` (XSD) = `a:CT_ChartShapeProperties/c:spPr` (SDK)
+- `c:CT_Extension/c:ext` (XSD) = `c16r3:CT_DataDisplayOptions16/c:ext` (SDK)
+- `c:CT_Extension/c:ext` (XSD) = `c:CT_Area3DChartExtension/c:ext` (SDK)
+- `c:CT_Extension/c:ext` (XSD) = `c:CT_AreaChartExtension/c:ext` (SDK)
+- `c:CT_Extension/c:ext` (XSD) = `c:CT_AreaSerExtension/c:ext` (SDK)
+- `c:CT_Extension/c:ext` (XSD) = `c:CT_Bar3DChartExtension/c:ext` (SDK)
+- `c:CT_Extension/c:ext` (XSD) = `c:CT_BarChartExtension/c:ext` (SDK)
+- `c:CT_Extension/c:ext` (XSD) = `c:CT_BarSerExtension/c:ext` (SDK)
+- `c:CT_Extension/c:ext` (XSD) = `c:CT_BubbleChartExtension/c:ext` (SDK)
+- `c:CT_Extension/c:ext` (XSD) = `c:CT_BubbleSerExtension/c:ext` (SDK)
+- `c:CT_Extension/c:ext` (XSD) = `c:CT_CatAxExtension/c:ext` (SDK)
+- `c:CT_Extension/c:ext` (XSD) = `c:CT_ChartSpaceExtension/c:ext` (SDK)
+- `c:CT_Extension/c:ext` (XSD) = `c:CT_DLblExtension/c:ext` (SDK)
+- `c:CT_Extension/c:ext` (XSD) = `c:CT_DLblsExtension/c:ext` (SDK)
+- `c:CT_Extension/c:ext` (XSD) = `c:CT_DateAxExtension/c:ext` (SDK)
+- `c:CT_Extension/c:ext` (XSD) = `c:CT_Line3DChartExtension/c:ext` (SDK)
+- `c:CT_Extension/c:ext` (XSD) = `c:CT_LineChartExtension/c:ext` (SDK)
+- `c:CT_Extension/c:ext` (XSD) = `c:CT_LineSerExtension/c:ext` (SDK)
+- `c:CT_Extension/c:ext` (XSD) = `c:CT_MultiLvlStrRefExtension/c:ext` (SDK)
+- `c:CT_Extension/c:ext` (XSD) = `c:CT_NumRefExtension/c:ext` (SDK)
+- `c:CT_Extension/c:ext` (XSD) = `c:CT_Pie3DChartExtension/c:ext` (SDK)
+- `c:CT_Extension/c:ext` (XSD) = `c:CT_PieChartExtension/c:ext` (SDK)
+- `c:CT_Extension/c:ext` (XSD) = `c:CT_PieSerExtension/c:ext` (SDK)
+- `c:CT_Extension/c:ext` (XSD) = `c:CT_RadarChartExtension/c:ext` (SDK)
+- `c:CT_Extension/c:ext` (XSD) = `c:CT_RadarSerExtension/c:ext` (SDK)
+- `c:CT_Extension/c:ext` (XSD) = `c:CT_ScatterChartExtension/c:ext` (SDK)
+- `c:CT_Extension/c:ext` (XSD) = `c:CT_ScatterSerExtension/c:ext` (SDK)
+- `c:CT_Extension/c:ext` (XSD) = `c:CT_SerAxExtension/c:ext` (SDK)
+- `c:CT_Extension/c:ext` (XSD) = `c:CT_StockChartExtension/c:ext` (SDK)
+- `c:CT_Extension/c:ext` (XSD) = `c:CT_StrDataExtension/c:ext` (SDK)
+- `c:CT_Extension/c:ext` (XSD) = `c:CT_StrRefExtension/c:ext` (SDK)
+- `c:CT_Extension/c:ext` (XSD) = `c:CT_Surface3DChartExtension/c:ext` (SDK)
+- `c:CT_Extension/c:ext` (XSD) = `c:CT_SurfaceChartExtension/c:ext` (SDK)
+- `c:CT_Extension/c:ext` (XSD) = `c:CT_SurfaceSerExtension/c:ext` (SDK)
+- `c:CT_Extension/c:ext` (XSD) = `c:CT_ValAxExtension/c:ext` (SDK)
+- `c:CT_ExtensionList/c:extLst` (XSD) = `c:CT_Area3DChartExtensionList/c:extLst` (SDK)
+- `c:CT_ExtensionList/c:extLst` (XSD) = `c:CT_AreaChartExtensionList/c:extLst` (SDK)
+- `c:CT_ExtensionList/c:extLst` (XSD) = `c:CT_AreaSerExtensionList/c:extLst` (SDK)
+- `c:CT_ExtensionList/c:extLst` (XSD) = `c:CT_Bar3DChartExtensionList/c:extLst` (SDK)
+- `c:CT_ExtensionList/c:extLst` (XSD) = `c:CT_BarChartExtensionList/c:extLst` (SDK)
+- `c:CT_ExtensionList/c:extLst` (XSD) = `c:CT_BarSerExtensionList/c:extLst` (SDK)
+- `c:CT_ExtensionList/c:extLst` (XSD) = `c:CT_BubbleChartExtensionList/c:extLst` (SDK)
+- `c:CT_ExtensionList/c:extLst` (XSD) = `c:CT_BubbleSerExtensionList/c:extLst` (SDK)
+- `c:CT_ExtensionList/c:extLst` (XSD) = `c:CT_CatAxExtensionList/c:extLst` (SDK)
+- `c:CT_ExtensionList/c:extLst` (XSD) = `c:CT_ChartExtensionList/c:extLst` (SDK)
+- `c:CT_ExtensionList/c:extLst` (XSD) = `c:CT_ChartSpaceExtensionList/c:extLst` (SDK)
+- `c:CT_ExtensionList/c:extLst` (XSD) = `c:CT_DLblExtensionList/c:extLst` (SDK)
+- `c:CT_ExtensionList/c:extLst` (XSD) = `c:CT_DLblsExtensionList/c:extLst` (SDK)
+- `c:CT_ExtensionList/c:extLst` (XSD) = `c:CT_DateAxExtensionList/c:extLst` (SDK)
+- `c:CT_ExtensionList/c:extLst` (XSD) = `c:CT_Line3DChartExtensionList/c:extLst` (SDK)
+- `c:CT_ExtensionList/c:extLst` (XSD) = `c:CT_LineChartExtensionList/c:extLst` (SDK)
+- `c:CT_ExtensionList/c:extLst` (XSD) = `c:CT_LineSerExtensionList/c:extLst` (SDK)
+- `c:CT_ExtensionList/c:extLst` (XSD) = `c:CT_MultiLvlStrRefExtensionList/c:extLst` (SDK)
+- `c:CT_ExtensionList/c:extLst` (XSD) = `c:CT_NumRefExtensionList/c:extLst` (SDK)
+- `c:CT_ExtensionList/c:extLst` (XSD) = `c:CT_Pie3DChartExtensionList/c:extLst` (SDK)
+- `c:CT_ExtensionList/c:extLst` (XSD) = `c:CT_PieChartExtensionList/c:extLst` (SDK)
+- `c:CT_ExtensionList/c:extLst` (XSD) = `c:CT_PieSerExtensionList/c:extLst` (SDK)
+- `c:CT_ExtensionList/c:extLst` (XSD) = `c:CT_RadarChartExtensionList/c:extLst` (SDK)
+- `c:CT_ExtensionList/c:extLst` (XSD) = `c:CT_RadarSerExtensionList/c:extLst` (SDK)
+- `c:CT_ExtensionList/c:extLst` (XSD) = `c:CT_ScatterChartExtensionList/c:extLst` (SDK)
+- `c:CT_ExtensionList/c:extLst` (XSD) = `c:CT_ScatterSerExtensionList/c:extLst` (SDK)
+- `c:CT_ExtensionList/c:extLst` (XSD) = `c:CT_SerAxExtensionList/c:extLst` (SDK)
+- `c:CT_ExtensionList/c:extLst` (XSD) = `c:CT_StockChartExtensionList/c:extLst` (SDK)
+- `c:CT_ExtensionList/c:extLst` (XSD) = `c:CT_StrDataExtensionList/c:extLst` (SDK)
+- `c:CT_ExtensionList/c:extLst` (XSD) = `c:CT_StrRefExtensionList/c:extLst` (SDK)
+- `c:CT_ExtensionList/c:extLst` (XSD) = `c:CT_Surface3DChartExtensionList/c:extLst` (SDK)
+- `c:CT_ExtensionList/c:extLst` (XSD) = `c:CT_SurfaceChartExtensionList/c:extLst` (SDK)
+- `c:CT_ExtensionList/c:extLst` (XSD) = `c:CT_SurfaceSerExtensionList/c:extLst` (SDK)
+- `c:CT_ExtensionList/c:extLst` (XSD) = `c:CT_ValAxExtensionList/c:extLst` (SDK)
+- `c:CT_Thickness/c:thickness` (XSD) = `c:CT_WallThickness/c:thickness` (SDK)
+- `m:CT_Integer255/m:count` (XSD) = `m:CT_Integer64/m:count` (SDK)
+- `m:CT_String/m:mathFont` (XSD) = `m:CT_FontFace/m:mathFont` (SDK)
+- `m:CT_UnSignedInteger/m:cGp` (XSD) = `m:CT_UnSignedShort/m:cGp` (SDK)
+- `m:CT_UnSignedInteger/m:cSp` (XSD) = `m:CT_TwipsMeasure/m:cSp` (SDK)
+- `m:CT_UnSignedInteger/m:rSp` (XSD) = `m:CT_UnSignedShort/m:rSp` (SDK)
+- `p:CT_Extension/p:ext` (XSD) = `p:CT_ApplicationNonVisualDrawingPropsExtension/p:ext` (SDK)
+- `p:CT_Extension/p:ext` (XSD) = `p:CT_CommentAuthorExtension/p:ext` (SDK)
+- `p:CT_Extension/p:ext` (XSD) = `p:CT_CommentExtension/p:ext` (SDK)
+- `p:CT_Extension/p:ext` (XSD) = `p:CT_CommonSlideDataExtension/p:ext` (SDK)
+- `p:CT_Extension/p:ext` (XSD) = `p:CT_HandoutMasterExtension/p:ext` (SDK)
+- `p:CT_Extension/p:ext` (XSD) = `p:CT_NotesMasterExtension/p:ext` (SDK)
+- `p:CT_Extension/p:ext` (XSD) = `p:CT_PresentationExtension/p:ext` (SDK)
+- `p:CT_Extension/p:ext` (XSD) = `p:CT_PresentationPropertiesExtension/p:ext` (SDK)
+- `p:CT_Extension/p:ext` (XSD) = `p:CT_ShowPropertiesExtension/p:ext` (SDK)
+- `p:CT_Extension/p:ext` (XSD) = `p:CT_SlideExtension/p:ext` (SDK)
+- `p:CT_Extension/p:ext` (XSD) = `p:CT_SlideLayoutExtension/p:ext` (SDK)
+- `p:CT_Extension/p:ext` (XSD) = `p:CT_SlideMasterExtension/p:ext` (SDK)
+- `p:CT_ExtensionList/p:extLst` (XSD) = `p:CT_ApplicationNonVisualDrawingPropsExtensionList/p:extLst` (SDK)
+- `p:CT_ExtensionList/p:extLst` (XSD) = `p:CT_CommentAuthorExtensionList/p:extLst` (SDK)
+- `p:CT_ExtensionList/p:extLst` (XSD) = `p:CT_CommonSlideDataExtensionList/p:extLst` (SDK)
+- `p:CT_ExtensionList/p:extLst` (XSD) = `p:CT_PresentationExtensionList/p:extLst` (SDK)
+- `p:CT_ExtensionList/p:extLst` (XSD) = `p:CT_PresentationPropertiesExtensionList/p:extLst` (SDK)
+- `p:CT_ExtensionList/p:extLst` (XSD) = `p:CT_ShowPropertiesExtensionList/p:extLst` (SDK)
+- `p:CT_ExtensionListModify/p:extLst` (XSD) = `p:CT_CommentExtensionList/p:extLst` (SDK)
+- `p:CT_ExtensionListModify/p:extLst` (XSD) = `p:CT_HandoutMasterExtensionList/p:extLst` (SDK)
+- `p:CT_ExtensionListModify/p:extLst` (XSD) = `p:CT_NotesMasterExtensionList/p:extLst` (SDK)
+- `p:CT_ExtensionListModify/p:extLst` (XSD) = `p:CT_SlideExtensionList/p:extLst` (SDK)
+- `p:CT_ExtensionListModify/p:extLst` (XSD) = `p:CT_SlideLayoutExtensionList/p:extLst` (SDK)
+- `p:CT_ExtensionListModify/p:extLst` (XSD) = `p:CT_SlideMasterExtensionList/p:extLst` (SDK)
+- `p:CT_Rel/p:contentPart` (XSD) = `p:CT_ContentPart/p:contentPart` (SDK)
+- `p:CT_TLAnimVariant/p:progress` (XSD) = `p:CT_TLAnimFloat/p:progress` (SDK)
+- `p:CT_TimeNodeList/p:tnLst` (XSD) = `p:CT_RootTimeNode/p:tnLst` (SDK)
+- `s:ST_TrueFalseBlank/o:LockedField` (XSD) = `o:ST_TrueFalseBlank/o:LockedField` (SDK)
+- `s:ST_TrueFalseBlank/xvml:AutoFill` (XSD) = `xvml:ST_TrueFalseBlank/xvml:AutoFill` (SDK)
+- `s:ST_TrueFalseBlank/xvml:AutoLine` (XSD) = `xvml:ST_TrueFalseBlank/xvml:AutoLine` (SDK)
+- `s:ST_TrueFalseBlank/xvml:AutoPict` (XSD) = `xvml:ST_TrueFalseBlank/xvml:AutoPict` (SDK)
+- `s:ST_TrueFalseBlank/xvml:AutoScale` (XSD) = `xvml:ST_TrueFalseBlank/xvml:AutoScale` (SDK)
+- `s:ST_TrueFalseBlank/xvml:Camera` (XSD) = `xvml:ST_TrueFalseBlank/xvml:Camera` (SDK)
+- `s:ST_TrueFalseBlank/xvml:Cancel` (XSD) = `xvml:ST_TrueFalseBlank/xvml:Cancel` (SDK)
+- `s:ST_TrueFalseBlank/xvml:ColHidden` (XSD) = `xvml:ST_TrueFalseBlank/xvml:ColHidden` (SDK)
+- `s:ST_TrueFalseBlank/xvml:Colored` (XSD) = `xvml:ST_TrueFalseBlank/xvml:Colored` (SDK)
+- `s:ST_TrueFalseBlank/xvml:DDE` (XSD) = `xvml:ST_TrueFalseBlank/xvml:DDE` (SDK)
+- `s:ST_TrueFalseBlank/xvml:Default` (XSD) = `xvml:ST_TrueFalseBlank/xvml:Default` (SDK)
+- `s:ST_TrueFalseBlank/xvml:DefaultSize` (XSD) = `xvml:ST_TrueFalseBlank/xvml:DefaultSize` (SDK)
+- `s:ST_TrueFalseBlank/xvml:Disabled` (XSD) = `xvml:ST_TrueFalseBlank/xvml:Disabled` (SDK)
+- `s:ST_TrueFalseBlank/xvml:Dismiss` (XSD) = `xvml:ST_TrueFalseBlank/xvml:Dismiss` (SDK)
+- `s:ST_TrueFalseBlank/xvml:FirstButton` (XSD) = `xvml:ST_TrueFalseBlank/xvml:FirstButton` (SDK)
+- `s:ST_TrueFalseBlank/xvml:Help` (XSD) = `xvml:ST_TrueFalseBlank/xvml:Help` (SDK)
+- `s:ST_TrueFalseBlank/xvml:Horiz` (XSD) = `xvml:ST_TrueFalseBlank/xvml:Horiz` (SDK)
+- `s:ST_TrueFalseBlank/xvml:JustLastX` (XSD) = `xvml:ST_TrueFalseBlank/xvml:JustLastX` (SDK)
+- `s:ST_TrueFalseBlank/xvml:LockText` (XSD) = `xvml:ST_TrueFalseBlank/xvml:LockText` (SDK)
+- `s:ST_TrueFalseBlank/xvml:Locked` (XSD) = `xvml:ST_TrueFalseBlank/xvml:Locked` (SDK)
+- `s:ST_TrueFalseBlank/xvml:MapOCX` (XSD) = `xvml:ST_TrueFalseBlank/xvml:MapOCX` (SDK)
+- `s:ST_TrueFalseBlank/xvml:MoveWithCells` (XSD) = `xvml:ST_TrueFalseBlank/xvml:MoveWithCells` (SDK)
+- `s:ST_TrueFalseBlank/xvml:MultiLine` (XSD) = `xvml:ST_TrueFalseBlank/xvml:MultiLine` (SDK)
+- `s:ST_TrueFalseBlank/xvml:NoThreeD` (XSD) = `xvml:ST_TrueFalseBlank/xvml:NoThreeD` (SDK)
+- `s:ST_TrueFalseBlank/xvml:NoThreeD2` (XSD) = `xvml:ST_TrueFalseBlank/xvml:NoThreeD2` (SDK)
+- `s:ST_TrueFalseBlank/xvml:PrintObject` (XSD) = `xvml:ST_TrueFalseBlank/xvml:PrintObject` (SDK)
+- `s:ST_TrueFalseBlank/xvml:RecalcAlways` (XSD) = `xvml:ST_TrueFalseBlank/xvml:RecalcAlways` (SDK)
+- `s:ST_TrueFalseBlank/xvml:RowHidden` (XSD) = `xvml:ST_TrueFalseBlank/xvml:RowHidden` (SDK)
+- `s:ST_TrueFalseBlank/xvml:SecretEdit` (XSD) = `xvml:ST_TrueFalseBlank/xvml:SecretEdit` (SDK)
+- `s:ST_TrueFalseBlank/xvml:SizeWithCells` (XSD) = `xvml:ST_TrueFalseBlank/xvml:SizeWithCells` (SDK)
+- `s:ST_TrueFalseBlank/xvml:UIObj` (XSD) = `xvml:ST_TrueFalseBlank/xvml:UIObj` (SDK)
+- `s:ST_TrueFalseBlank/xvml:VScroll` (XSD) = `xvml:ST_TrueFalseBlank/xvml:VScroll` (SDK)
+- `s:ST_TrueFalseBlank/xvml:ValidIds` (XSD) = `xvml:ST_TrueFalseBlank/xvml:ValidIds` (SDK)
+- `s:ST_TrueFalseBlank/xvml:Visible` (XSD) = `xvml:ST_TrueFalseBlank/xvml:Visible` (SDK)
+- `w:CT_Attr/w:attr` (XSD) = `w:CT_XmlAttr/w:attr` (SDK)
+- `w:CT_BottomPageBorder/w:bottom` (XSD) = `w:CT_Border/w:bottom` (SDK)
+- `w:CT_Charset/w:charset` (XSD) = `w:CT_CharacterSet/w:charset` (SDK)
+- `w:CT_DecimalNumber/w:abstractNumId` (XSD) = `w:CT_NonNegativeDecimalNumber/w:abstractNumId` (SDK)
+- `w:CT_DecimalNumber/w:bookFoldPrintingSheets` (XSD) = `w:CT_NonNegativeShort/w:bookFoldPrintingSheets` (SDK)
+- `w:CT_DecimalNumber/w:colDelim` (XSD) = `w:CT_UnsignedDecimalNumber/w:colDelim` (SDK)
+- `w:CT_DecimalNumber/w:column` (XSD) = `w:CT_UnsignedDecimalNumber/w:column` (SDK)
+- `w:CT_DecimalNumber/w:consecutiveHyphenLimit` (XSD) = `w:CT_UnsignedShortNumber/w:consecutiveHyphenLimit` (SDK)
+- `w:CT_DecimalNumber/w:default` (XSD) = `w:CT_UnsignedDecimalNumberMax24/w:default` (SDK)
+- `w:CT_DecimalNumber/w:displayHorizontalDrawingGridEvery` (XSD) = `w:CT_UnsignedInt7/w:displayHorizontalDrawingGridEvery` (SDK)
+- `w:CT_DecimalNumber/w:displayVerticalDrawingGridEvery` (XSD) = `w:CT_UnsignedInt7/w:displayVerticalDrawingGridEvery` (SDK)
+- `w:CT_DecimalNumber/w:divId` (XSD) = `w:CT_NonZeroDecimalNumber/w:divId` (SDK)
+- `w:CT_DecimalNumber/w:ilvl` (XSD) = `w:CT_NonNegativeDecimalNumber255/w:ilvl` (SDK)
+- `w:CT_DecimalNumber/w:maxLength` (XSD) = `w:CT_PositiveShort/w:maxLength` (SDK)
+- `w:CT_DecimalNumber/w:numId` (XSD) = `w:CT_NonNegativeDecimalNumber/w:numId` (SDK)
+- `w:CT_DecimalNumber/w:numStart` (XSD) = `w:CT_FtnEdnNumStart/w:numStart` (SDK)
+- `w:CT_DecimalNumber/w:start` (XSD) = `w:CT_NonNegativeDecimalNumber/w:start` (SDK)
+- `w:CT_DecimalNumber/w:tblStyleColBandSize` (XSD) = `w:CT_UnsignedDecimalNumberMax3/w:tblStyleColBandSize` (SDK)
+- `w:CT_DecimalNumber/w:tblStyleRowBandSize` (XSD) = `w:CT_UnsignedDecimalNumberMax3/w:tblStyleRowBandSize` (SDK)
+- `w:CT_DecimalNumber/w:uiPriority` (XSD) = `w:CT_UiPriority/w:uiPriority` (SDK)
+- `w:CT_DecimalNumberOrPrecent/w:summaryLength` (XSD) = `w:CT_UnsignedInt100/w:summaryLength` (SDK)
+- `w:CT_HpsMeasure/w:hpsRaise` (XSD) = `w:CT_HpsRaise/w:hpsRaise` (SDK)
+- `w:CT_HpsMeasure/w:kern` (XSD) = `w:CT_HpsKern/w:kern` (SDK)
+- `w:CT_Jc/w:lvlJc` (XSD) = `w:CT_LevelJustification/w:lvlJc` (SDK)
+- `w:CT_JcTable/w:jc` (XSD) = `w:CT_TblJc/w:jc` (SDK)
+- `w:CT_Kinsoku/w:noLineBreaksAfter` (XSD) = `w:CT_KinsokuAfter/w:noLineBreaksAfter` (SDK)
+- `w:CT_Kinsoku/w:noLineBreaksBefore` (XSD) = `w:CT_KinsokuBefore/w:noLineBreaksBefore` (SDK)
+- `w:CT_OnOff/w:autoRedefine` (XSD) = `w:CT_OnOffOnly/w:autoRedefine` (SDK)
+- `w:CT_OnOff/w:bidiVisual` (XSD) = `w:CT_OnOffOnly/w:bidiVisual` (SDK)
+- `w:CT_OnOff/w:cantSplit` (XSD) = `w:CT_OnOffOnly/w:cantSplit` (SDK)
+- `w:CT_OnOff/w:flatBorders` (XSD) = `w:CT_OnOffOnly/w:flatBorders` (SDK)
+- `w:CT_OnOff/w:hidden` (XSD) = `w:CT_OnOffOnly/w:hidden` (SDK)
+- `w:CT_OnOff/w:hideMark` (XSD) = `w:CT_OnOffOnly/w:hideMark` (SDK)
+- `w:CT_OnOff/w:linkedToFile` (XSD) = `w:CT_OnOffOnly/w:linkedToFile` (SDK)
+- `w:CT_OnOff/w:locked` (XSD) = `w:CT_OnOffOnly/w:locked` (SDK)
+- `w:CT_OnOff/w:noBorder` (XSD) = `w:CT_OnOffOnly/w:noBorder` (SDK)
+- `w:CT_OnOff/w:noResizeAllowed` (XSD) = `w:CT_OnOffOnly/w:noResizeAllowed` (SDK)
+- `w:CT_OnOff/w:noWrap` (XSD) = `w:CT_OnOffOnly/w:noWrap` (SDK)
+- `w:CT_OnOff/w:personal` (XSD) = `w:CT_OnOffOnly/w:personal` (SDK)
+- `w:CT_OnOff/w:personalCompose` (XSD) = `w:CT_OnOffOnly/w:personalCompose` (SDK)
+- `w:CT_OnOff/w:personalReply` (XSD) = `w:CT_OnOffOnly/w:personalReply` (SDK)
+- `w:CT_OnOff/w:qFormat` (XSD) = `w:CT_OnOffOnly/w:qFormat` (SDK)
+- `w:CT_OnOff/w:semiHidden` (XSD) = `w:CT_OnOffOnly/w:semiHidden` (SDK)
+- `w:CT_OnOff/w:tblHeader` (XSD) = `w:CT_OnOffOnly/w:tblHeader` (SDK)
+- `w:CT_OnOff/w:tcFitText` (XSD) = `w:CT_OnOffOnly/w:tcFitText` (SDK)
+- `w:CT_OnOff/w:unhideWhenUsed` (XSD) = `w:CT_OnOffOnly/w:unhideWhenUsed` (SDK)
+- `w:CT_OptimizeForBrowser/w:optimizeForBrowser` (XSD) = `w:CT_OnOff/w:optimizeForBrowser` (SDK)
+- `w:CT_PPrBase/w:pPr` (XSD) = `w:CT_PPrExtended/w:pPr` (SDK)
+- `w:CT_PPrGeneral/w:pPr` (XSD) = `w:CT_PPrBase/w:pPr` (SDK)
+- `w:CT_PPrGeneral/w:pPr` (XSD) = `w:CT_PPrBaseStyleable/w:pPr` (SDK)
+- `w:CT_PPrGeneral/w:pPr` (XSD) = `w:CT_PPrStyle/w:pPr` (SDK)
+- `w:CT_PageBorder/w:left` (XSD) = `w:CT_Border/w:left` (SDK)
+- `w:CT_PageBorder/w:right` (XSD) = `w:CT_Border/w:right` (SDK)
+- `w:CT_Picture/w:pict` (XSD) = `w:CT_PictureBulletBase/w:pict` (SDK)
+- `w:CT_RPr/w:rPr` (XSD) = `w:CT_RPrBaseStyleable/w:rPr` (SDK)
+- `w:CT_RPr/w:rPr` (XSD) = `w:CT_RPrList/w:rPr` (SDK)
+- `w:CT_RPr/w:rPr` (XSD) = `w:CT_RPrStyle/w:rPr` (SDK)
+- `w:CT_RPrChange/w:del` (XSD) = `w:CT_MathCtrlDel/w:del` (SDK)
+- `w:CT_RPrOriginal/w:rPr` (XSD) = `w:CT_RPr/w:rPr` (SDK)
+- `w:CT_Rel/w:contentPart` (XSD) = `w:CT_ContentPart/w:contentPart` (SDK)
+- `w:CT_SignedTwipsMeasure/w:spacing` (XSD) = `w:CT_ShortTwipsMeasure/w:spacing` (SDK)
+- `w:CT_String/w:aliases` (XSD) = `w:CT_String253/w:aliases` (SDK)
+- `w:CT_String/w:basedOn` (XSD) = `w:CT_String253/w:basedOn` (SDK)
+- `w:CT_String/w:clickAndTypeStyle` (XSD) = `w:CT_String253/w:clickAndTypeStyle` (SDK)
+- `w:CT_String/w:default` (XSD) = `w:CT_String255/w:default` (SDK)
+- `w:CT_String/w:defaultTableStyle` (XSD) = `w:CT_String253/w:defaultTableStyle` (SDK)
+- `w:CT_String/w:format` (XSD) = `w:CT_String64/w:format` (SDK)
+- `w:CT_String/w:link` (XSD) = `w:CT_String253/w:link` (SDK)
+- `w:CT_String/w:listEntry` (XSD) = `w:CT_String255/w:listEntry` (SDK)
+- `w:CT_String/w:name` (XSD) = `w:CT_String253/w:name` (SDK)
+- `w:CT_String/w:name` (XSD) = `w:CT_String255/w:name` (SDK)
+- `w:CT_String/w:name` (XSD) = `w:CT_StyleName/w:name` (SDK)
+- `w:CT_String/w:next` (XSD) = `w:CT_String253/w:next` (SDK)
+- `w:CT_String/w:numStyleLink` (XSD) = `w:CT_String253/w:numStyleLink` (SDK)
+- `w:CT_String/w:pStyle` (XSD) = `w:CT_String253/w:pStyle` (SDK)
+- `w:CT_String/w:rStyle` (XSD) = `w:CT_String253/w:rStyle` (SDK)
+- `w:CT_String/w:styleLink` (XSD) = `w:CT_String253/w:styleLink` (SDK)
+- `w:CT_String/w:tblStyle` (XSD) = `w:CT_String253/w:tblStyle` (SDK)
+- `w:CT_StylePaneFilter/w:stylePaneFormatFilter` (XSD) = `w:CT_StylePaneFormatFilter/w:stylePaneFormatFilter` (SDK)
+- `w:CT_StyleSort/w:stylePaneSortMethod` (XSD) = `w:CT_StylePaneSortMethods/w:stylePaneSortMethod` (SDK)
+- `w:CT_TblPrBase/w:tblPr` (XSD) = `w:CT_TblPrStyle/w:tblPr` (SDK)
+- `w:CT_TblPrBase/w:tblPr` (XSD) = `w:CT_TblPrStyleOverride/w:tblPr` (SDK)
+- `w:CT_TblWidth/w:left` (XSD) = `w:CT_TblWidthDxaNil/w:left` (SDK)
+- `w:CT_TblWidth/w:right` (XSD) = `w:CT_TblWidthDxaNil/w:right` (SDK)
+- `w:CT_TblWidth/w:tblInd` (XSD) = `w:CT_TblWidthShort/w:tblInd` (SDK)
+- `w:CT_TcPr/w:tcPr` (XSD) = `w:CT_TcPrStyle/w:tcPr` (SDK)
+- `w:CT_TcPr/w:tcPr` (XSD) = `w:CT_TcPrStyleOverride/w:tcPr` (SDK)
+- `w:CT_Text/w:fldData` (XSD) = `w:CT_Base64BinaryText/w:fldData` (SDK)
+- `w:CT_TopPageBorder/w:top` (XSD) = `w:CT_Border/w:top` (SDK)
+- `w:CT_TrPr/w:trPr` (XSD) = `w:CT_TrPrBaseStyleable/w:trPr` (SDK)
+- `w:CT_TwipsMeasure/w:defaultTabStop` (XSD) = `w:CT_NonNegativeShort/w:defaultTabStop` (SDK)
+- `w:CT_VerticalJc/w:vAlign` (XSD) = `w:CT_VerticalTblJc/w:vAlign` (SDK)
+- `x:CT_Cell/x:nc` (XSD) = `x:CT_NewCell/x:nc` (SDK)
+- `x:CT_Extension/x:ext` (XSD) = `x:CT_CacheFieldExtension/x:ext` (SDK)
+- `x:CT_Extension/x:ext` (XSD) = `x:CT_CacheHierarchyExtension/x:ext` (SDK)
+- `x:CT_Extension/x:ext` (XSD) = `x:CT_CacheSourceExtension/x:ext` (SDK)
+- `x:CT_Extension/x:ext` (XSD) = `x:CT_CalculatedMemberExtension/x:ext` (SDK)
+- `x:CT_Extension/x:ext` (XSD) = `x:CT_CfRuleExtension/x:ext` (SDK)
+- `x:CT_Extension/x:ext` (XSD) = `x:CT_ConnectionExtension/x:ext` (SDK)
+- `x:CT_Extension/x:ext` (XSD) = `x:CT_DataFieldExtension/x:ext` (SDK)
+- `x:CT_Extension/x:ext` (XSD) = `x:CT_PivotCacheDefinitionExtension/x:ext` (SDK)
+- `x:CT_Extension/x:ext` (XSD) = `x:CT_PivotFieldExtension/x:ext` (SDK)
+- `x:CT_Extension/x:ext` (XSD) = `x:CT_PivotFilterExtension/x:ext` (SDK)
+- `x:CT_Extension/x:ext` (XSD) = `x:CT_PivotHierarchyExtension/x:ext` (SDK)
+- `x:CT_Extension/x:ext` (XSD) = `x:CT_QueryTableExtension/x:ext` (SDK)
+- `x:CT_Extension/x:ext` (XSD) = `x:CT_StylesheetExtension/x:ext` (SDK)
+- `x:CT_Extension/x:ext` (XSD) = `x:CT_TableExtension/x:ext` (SDK)
+- `x:CT_Extension/x:ext` (XSD) = `x:CT_WorkbookExtension/x:ext` (SDK)
+- `x:CT_Extension/x:ext` (XSD) = `x:CT_WorksheetExtension/x:ext` (SDK)
+- `x:CT_Extension/x:ext` (XSD) = `x:CT_pivotTableDefinitionExtension/x:ext` (SDK)
+- `x:CT_ExtensionList/x:extLst` (XSD) = `x:CT_CacheFieldExtensionList/x:extLst` (SDK)
+- `x:CT_ExtensionList/x:extLst` (XSD) = `x:CT_CacheHierarchyExtensionList/x:extLst` (SDK)
+- `x:CT_ExtensionList/x:extLst` (XSD) = `x:CT_CacheSourceExtensionList/x:extLst` (SDK)
+- `x:CT_ExtensionList/x:extLst` (XSD) = `x:CT_CalculatedMemberExtensionList/x:extLst` (SDK)
+- `x:CT_ExtensionList/x:extLst` (XSD) = `x:CT_CfRuleExtensionList/x:extLst` (SDK)
+- `x:CT_ExtensionList/x:extLst` (XSD) = `x:CT_ConnectionExtensionList/x:extLst` (SDK)
+- `x:CT_ExtensionList/x:extLst` (XSD) = `x:CT_DataFieldExtensionList/x:extLst` (SDK)
+- `x:CT_ExtensionList/x:extLst` (XSD) = `x:CT_PivotCacheDefinitionExtensionList/x:extLst` (SDK)
+- `x:CT_ExtensionList/x:extLst` (XSD) = `x:CT_PivotFieldExtensionList/x:extLst` (SDK)
+- `x:CT_ExtensionList/x:extLst` (XSD) = `x:CT_PivotFilterExtensionList/x:extLst` (SDK)
+- `x:CT_ExtensionList/x:extLst` (XSD) = `x:CT_PivotHierarchyExtensionList/x:extLst` (SDK)
+- `x:CT_ExtensionList/x:extLst` (XSD) = `x:CT_QueryTableExtensionList/x:extLst` (SDK)
+- `x:CT_ExtensionList/x:extLst` (XSD) = `x:CT_StylesheetExtensionList/x:extLst` (SDK)
+- `x:CT_ExtensionList/x:extLst` (XSD) = `x:CT_TableExtensionList/x:extLst` (SDK)
+- `x:CT_ExtensionList/x:extLst` (XSD) = `x:CT_WorkbookExtensionList/x:extLst` (SDK)
+- `x:CT_ExtensionList/x:extLst` (XSD) = `x:CT_WorksheetExtensionList/x:extLst` (SDK)
+- `x:CT_ExtensionList/x:extLst` (XSD) = `x:CT_pivotTableDefinitionExtensionList/x:extLst` (SDK)
+- `x:CT_FontFamily/x:family` (XSD) = `x:CT_FontFamilyNum/x:family` (SDK)
+- `x:CT_FontName/x:name` (XSD) = `x:CT_FontNameNonEmpty/x:name` (SDK)
+- `x:CT_IntProperty/x:charset` (XSD) = `x:CT_ByteProperty/x:charset` (SDK)
+- `xdr:CT_Rel/xdr:contentPart` (XSD) = `xdr14:CT_ContentPart/xdr:contentPart` (SDK)
+- `xsd:integer/xvml:Accel` (XSD) = `xsd:unsignedByte/xvml:Accel` (SDK)
+- `xsd:integer/xvml:Accel2` (XSD) = `xsd:unsignedByte/xvml:Accel2` (SDK)
+- `xsd:string/a:tableStyleId` (XSD) = `a:ST_Guid/a:tableStyleId` (SDK)
+- `xsd:string/b:AbbreviatedCaseNumber` (XSD) = `b:ST_String255/b:AbbreviatedCaseNumber` (SDK)
+- `xsd:string/b:AlbumTitle` (XSD) = `b:ST_String255/b:AlbumTitle` (SDK)
+- `xsd:string/b:BookTitle` (XSD) = `b:ST_String255/b:BookTitle` (SDK)
+- `xsd:string/b:BroadcastTitle` (XSD) = `b:ST_String255/b:BroadcastTitle` (SDK)
+- `xsd:string/b:Broadcaster` (XSD) = `b:ST_String255/b:Broadcaster` (SDK)
+- `xsd:string/b:CaseNumber` (XSD) = `b:ST_String255/b:CaseNumber` (SDK)
+- `xsd:string/b:ChapterNumber` (XSD) = `b:ST_String255/b:ChapterNumber` (SDK)
+- `xsd:string/b:City` (XSD) = `b:ST_String255/b:City` (SDK)
+- `xsd:string/b:Comments` (XSD) = `b:ST_String255/b:Comments` (SDK)
+- `xsd:string/b:ConferenceName` (XSD) = `b:ST_String255/b:ConferenceName` (SDK)
+- `xsd:string/b:Corporate` (XSD) = `b:ST_String255/b:Corporate` (SDK)
+- `xsd:string/b:CountryRegion` (XSD) = `b:ST_String255/b:CountryRegion` (SDK)
+- `xsd:string/b:Court` (XSD) = `b:ST_String255/b:Court` (SDK)
+- `xsd:string/b:Day` (XSD) = `b:ST_String255/b:Day` (SDK)
+- `xsd:string/b:DayAccessed` (XSD) = `b:ST_String255/b:DayAccessed` (SDK)
+- `xsd:string/b:Department` (XSD) = `b:ST_String255/b:Department` (SDK)
+- `xsd:string/b:Distributor` (XSD) = `b:ST_String255/b:Distributor` (SDK)
+- `xsd:string/b:Edition` (XSD) = `b:ST_String255/b:Edition` (SDK)
+- `xsd:string/b:First` (XSD) = `b:ST_String255/b:First` (SDK)
+- `xsd:string/b:Guid` (XSD) = `b:ST_String255/b:Guid` (SDK)
+- `xsd:string/b:Institution` (XSD) = `b:ST_String255/b:Institution` (SDK)
+- `xsd:string/b:InternetSiteTitle` (XSD) = `b:ST_String255/b:InternetSiteTitle` (SDK)
+- `xsd:string/b:Issue` (XSD) = `b:ST_String255/b:Issue` (SDK)
+- `xsd:string/b:JournalName` (XSD) = `b:ST_String255/b:JournalName` (SDK)
+- `xsd:string/b:LCID` (XSD) = `b:ST_String255/b:LCID` (SDK)
+- `xsd:string/b:Last` (XSD) = `b:ST_String255/b:Last` (SDK)
+- `xsd:string/b:Medium` (XSD) = `b:ST_String255/b:Medium` (SDK)
+- `xsd:string/b:Middle` (XSD) = `b:ST_String255/b:Middle` (SDK)
+- `xsd:string/b:Month` (XSD) = `b:ST_String255/b:Month` (SDK)
+- `xsd:string/b:MonthAccessed` (XSD) = `b:ST_String255/b:MonthAccessed` (SDK)
+- `xsd:string/b:NumberVolumes` (XSD) = `b:ST_String255/b:NumberVolumes` (SDK)
+- `xsd:string/b:Pages` (XSD) = `b:ST_String255/b:Pages` (SDK)
+- `xsd:string/b:PatentNumber` (XSD) = `b:ST_String255/b:PatentNumber` (SDK)
+- `xsd:string/b:PeriodicalTitle` (XSD) = `b:ST_String255/b:PeriodicalTitle` (SDK)
+- `xsd:string/b:ProductionCompany` (XSD) = `b:ST_String255/b:ProductionCompany` (SDK)
+- `xsd:string/b:PublicationTitle` (XSD) = `b:ST_String255/b:PublicationTitle` (SDK)
+- `xsd:string/b:Publisher` (XSD) = `b:ST_String255/b:Publisher` (SDK)
+- `xsd:string/b:RecordingNumber` (XSD) = `b:ST_String255/b:RecordingNumber` (SDK)
+- `xsd:string/b:RefOrder` (XSD) = `b:ST_String255/b:RefOrder` (SDK)
+- `xsd:string/b:Reporter` (XSD) = `b:ST_String255/b:Reporter` (SDK)
+- `xsd:string/b:ShortTitle` (XSD) = `b:ST_String255/b:ShortTitle` (SDK)
+- `xsd:string/b:StandardNumber` (XSD) = `b:ST_String255/b:StandardNumber` (SDK)
+- `xsd:string/b:StateProvince` (XSD) = `b:ST_String255/b:StateProvince` (SDK)
+- `xsd:string/b:Station` (XSD) = `b:ST_String255/b:Station` (SDK)
+- `xsd:string/b:Tag` (XSD) = `b:ST_String255/b:Tag` (SDK)
+- `xsd:string/b:Theater` (XSD) = `b:ST_String255/b:Theater` (SDK)
+- `xsd:string/b:ThesisType` (XSD) = `b:ST_String255/b:ThesisType` (SDK)
+- `xsd:string/b:Title` (XSD) = `b:ST_String255/b:Title` (SDK)
+- `xsd:string/b:Type` (XSD) = `b:ST_String255/b:Type` (SDK)
+- `xsd:string/b:URL` (XSD) = `b:ST_String255/b:URL` (SDK)
+- `xsd:string/b:Version` (XSD) = `b:ST_String255/b:Version` (SDK)
+- `xsd:string/b:Volume` (XSD) = `b:ST_String255/b:Volume` (SDK)
+- `xsd:string/b:Year` (XSD) = `b:ST_String255/b:Year` (SDK)
+- `xsd:string/b:YearAccessed` (XSD) = `b:ST_String255/b:YearAccessed` (SDK)
+- `xsd:string/c:evenFooter` (XSD) = `c:ST_Xstring/c:evenFooter` (SDK)
+- `xsd:string/c:evenHeader` (XSD) = `c:ST_Xstring/c:evenHeader` (SDK)
+- `xsd:string/c:firstFooter` (XSD) = `c:ST_Xstring/c:firstFooter` (SDK)
+- `xsd:string/c:firstHeader` (XSD) = `c:ST_Xstring/c:firstHeader` (SDK)
+- `xsd:string/c:formatCode` (XSD) = `c:ST_Xstring/c:formatCode` (SDK)
+- `xsd:string/c:name` (XSD) = `c:ST_Xstring/c:name` (SDK)
+- `xsd:string/c:oddFooter` (XSD) = `c:ST_Xstring/c:oddFooter` (SDK)
+- `xsd:string/c:oddHeader` (XSD) = `c:ST_Xstring/c:oddHeader` (SDK)
+- `xsd:string/c:v` (XSD) = `c:ST_Xstring/c:v` (SDK)
+- `xsd:string/cdr:x` (XSD) = `cdr:ST_MarkerCoordinate/cdr:x` (SDK)
+- `xsd:string/cdr:y` (XSD) = `cdr:ST_MarkerCoordinate/cdr:y` (SDK)
+- `xsd:string/o:LinkType` (XSD) = `o:ST_OLELinkType/o:LinkType` (SDK)
+- `xsd:string/vt:clsid` (XSD) = `vt:ST_Clsid/vt:clsid` (SDK)
+- `xsd:string/vt:cy` (XSD) = `vt:ST_Cy/vt:cy` (SDK)
+- `xsd:string/vt:error` (XSD) = `vt:ST_Error/vt:error` (SDK)
+- `xsd:string/wp:posOffset` (XSD) = `wp:ST_PositionOffset/wp:posOffset` (SDK)
+- `xsd:string/x:author` (XSD) = `x:CT_Xstring/x:author` (SDK)
+- `xsd:string/x:evenFooter` (XSD) = `x:CT_Xstring/x:evenFooter` (SDK)
+- `xsd:string/x:evenHeader` (XSD) = `x:CT_Xstring/x:evenHeader` (SDK)
+- `xsd:string/x:firstFooter` (XSD) = `x:CT_Xstring/x:firstFooter` (SDK)
+- `xsd:string/x:firstHeader` (XSD) = `x:CT_Xstring/x:firstHeader` (SDK)
+- `xsd:string/x:formula` (XSD) = `x:CT_Xstring/x:formula` (SDK)
+- `xsd:string/x:formula1` (XSD) = `x:CT_Xstring/x:formula1` (SDK)
+- `xsd:string/x:formula2` (XSD) = `x:CT_Xstring/x:formula2` (SDK)
+- `xsd:string/x:oddFooter` (XSD) = `x:CT_Xstring/x:oddFooter` (SDK)
+- `xsd:string/x:oddHeader` (XSD) = `x:CT_Xstring/x:oddHeader` (SDK)
+- `xsd:string/x:oldFormula` (XSD) = `x:CT_Xstring/x:oldFormula` (SDK)
+- `xsd:string/x:stp` (XSD) = `x:CT_Xstring/x:stp` (SDK)
+- `xsd:string/x:t` (XSD) = `x:CT_Xstring/x:t` (SDK)
+- `xsd:string/x:v` (XSD) = `x:CT_Xstring/x:v` (SDK)
+- `xsd:string/x:v` (XSD) = `x:ST_Xstring/x:v` (SDK)
+- `xsd:string/x:val` (XSD) = `x:CT_Xstring/x:val` (SDK)
+- `xsd:string/xdr:col` (XSD) = `xdr:ST_ColID/xdr:col` (SDK)
+- `xsd:string/xdr:colOff` (XSD) = `a:ST_Coordinate/xdr:colOff` (SDK)
+- `xsd:string/xdr:row` (XSD) = `xdr:ST_RowID/xdr:row` (SDK)
+- `xsd:string/xdr:rowOff` (XSD) = `a:ST_Coordinate/xdr:rowOff` (SDK)
+- `xsd:string/xvml:CF` (XSD) = `xvml:ST_CF/xvml:CF` (SDK)
+- `xsd:string/xvml:FmlaMacro` (XSD) = `xvml:ST_Macro/xvml:FmlaMacro` (SDK)
+
+## Types only in the SDK data (in the XSD's namespaces)
+
+- `a14:CT_NonVisualInkContentPartProperties/w14:cNvContentPartPr` (and 53 more SDK types: `a:CT_NonVisualDrawingProps`, `a:CT_OfficeArtExtensionList`, `a:CT_Transform2D`, `w14:CT_Bevel`, `w14:CT_Bevel`, `w14:CT_Camera` …)
+- `dgm:CT_DataModelRoot/dgm:dataModel` (and 1 more SDK types: `dgm:CT_DiagramDefinitionExtension`)
+- `p188:CT_CommentPropertiesExtension/p:ext` (and 1 more SDK types: `p:CT_PlaceholderExtension`)
+- `vt:CT_Cf/vt:cf`
+- `w:CT_CustomXmlRuby/w:customXml` (and 7 more SDK types: `w:CT_HyperlinkRuby`, `w:CT_MathCtrlMove`, `w:CT_MathCtrlMove`, `w:CT_OnOff`, `w:CT_SdtContentRunRuby`, `w:CT_SdtRunRuby` …)
+- `x:CT_SlicerCacheDefinitionExtension/x:ext` (and 2 more SDK types: `xdr:CT_Marker`, `xdr:CT_Marker`)
+
+## Types only in the XSD
+
+- `a:CT_BackgroundFormatting/wp:bg`
+- `a:CT_ContentPartLocking/a:cpLocks`
+- `a:CT_GroupShapeProperties/wp:grpSpPr`
+- `a:CT_Headers/a:headers`
+- `a:CT_NonVisualConnectorProperties/wp:cNvCnPr`
+- `a:CT_NonVisualContentPartProperties/wp:cNvContentPartPr`
+- `a:CT_NonVisualDrawingProps/wp:cNvPr`
+- `a:CT_NonVisualDrawingShapeProps/wp:cNvSpPr`
+- `a:CT_NonVisualGraphicFrameProperties/wp:cNvFrPr`
+- `a:CT_NonVisualGroupDrawingShapeProps/wp:cNvGrpSpPr`
+- `a:CT_OfficeArtExtensionList/wp:extLst`
+- `a:CT_ShapeProperties/wp:spPr`
+- `a:CT_ShapeStyle/wp:style`
+- `a:CT_TextBodyProperties/wp:bodyPr`
+- `a:CT_Transform2D/wp:xfrm`
+- `a:CT_WholeE2oFormatting/wp:whole`
+- `cp:CT_CoreProperties/cp:coreProperties`
+- `cp:CT_Keyword/cp:value`
+- `cp:CT_Keywords/cp:keywords`
+- `mc:anon_AlternateContent/mc:AlternateContent`
+- `mc:anon_Choice/mc:Choice`
+- `mc:anon_Fallback/mc:Fallback`
+- `ns168:CT_Default/ns168:Default`
+- `ns168:CT_Override/ns168:Override`
+- `ns168:CT_Types/ns168:Types`
+- `ns169:CT_RelationshipReference/ns169:RelationshipReference`
+- `ns169:CT_RelationshipsGroupReference/ns169:RelationshipsGroupReference`
+- `ns169:CT_SignatureTime/ns169:SignatureTime`
+- `ns170:CT_Relationship/ns170:Relationship`
+- `ns170:CT_Relationships/ns170:Relationships`
+- `o:CT_EquationXml/o:equationxml`
+- `p:CT_SmartTags/p:smartTags`
+- `w:CT_DecimalNumber/w:label`
+- `w:CT_Headers/w:headers`
+- `w:CT_OnOff/w:doNotEmbedSmartTags`
+- `w:CT_OnOff/w:saveSmartTagsAsXml`
+- `w:CT_Rel/w:longDesc`
+- `w:CT_SmartTagPr/w:smartTagPr`
+- `w:CT_SmartTagRun/w:smartTag`
+- `w:CT_SmartTagType/w:smartTagType`
+- `w:CT_String/w:header`
+- `w:CT_String/w:title`
+- `w:CT_UnsignedDecimalNumber/w:tabIndex`
+- `wp:CT_GraphicFrame/wp:graphicFrame`
+- `wp:CT_LinkedTextboxInformation/wp:linkedTxbx`
+- `wp:CT_TextboxInfo/wp:txbx`
+- `wp:CT_TxbxContent/wp:txbxContent`
+- `wp:CT_WordprocessingCanvas/wp:wpc`
+- `wp:CT_WordprocessingContentPart/wp:contentPart`
+- `wp:CT_WordprocessingContentPartNonVisual/wp:nvContentPartPr`
+- `wp:CT_WordprocessingGroup/wp:grpSp`
+- `wp:CT_WordprocessingGroup/wp:wgp`
+- `wp:CT_WordprocessingShape/wp:wsp`
+- `x:CT_CellSmartTag/x:cellSmartTag`
+- `x:CT_CellSmartTagPr/x:cellSmartTagPr`
+- `x:CT_CellSmartTags/x:cellSmartTags`
+- `x:CT_SmartTagPr/x:smartTagPr`
+- `x:CT_SmartTagType/x:smartTagType`
+- `x:CT_SmartTagTypes/x:smartTagTypes`
+- `x:CT_SmartTags/x:smartTags`
+- `xsd:dateTime/cp:lastPrinted`
+- `xsd:string/a:header`
+- `xsd:string/cp:category`
+- `xsd:string/cp:contentStatus`
+- `xsd:string/cp:lastModifiedBy`
+- `xsd:string/cp:revision`
+- `xsd:string/cp:version`
+- `xsd:string/ns169:Format`
+- `xsd:string/ns169:Value`
+- `xsd:string/x:securityDescriptor`
+
+## XSD frontend warnings
+
+- no canonical prefix for http://schemas.openxmlformats.org/officeDocument/2006/sharedTypes; using 's'
+- no canonical prefix for http://schemas.openxmlformats.org/package/2006/content-types; using 'ns168'
+- no canonical prefix for http://schemas.openxmlformats.org/package/2006/digital-signature; using 'ns169'
+- no canonical prefix for http://schemas.openxmlformats.org/package/2006/relationships; using 'ns170'
+- unknown element dcterms:created
+- unknown element dc:creator
+- unknown element dc:description
+- unknown element dc:identifier
+- unknown element dc:language
+- unknown element dcterms:modified
+- unknown element dc:subject
+- unknown element dc:title
+- unknown simple type w:ST_String

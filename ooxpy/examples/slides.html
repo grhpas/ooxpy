@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tutorial 10: Layouts, tables, shapes and notes in PowerPoint · oox</title>
+<style>
+  body { font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; max-width: 46rem; margin: 2rem auto; padding: 0 1rem; color: #1d1d1f; }
+  h1 { font-size: 1.7rem; margin-bottom: .2rem; } h2 { font-size: 1.2rem; margin-top: 2rem; }
+  .sub { color: #666; margin-top: 0; }
+  pre { background: #f5f5f7; border: 1px solid #e3e3e8; border-radius: 6px; padding: .8rem 1rem; overflow-x: auto; font-size: .9rem; line-height: 1.45; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  p code, li code, td code { background: #f0f0f3; padding: .05rem .3rem; border-radius: 4px; font-size: .9em; }
+  pre.out { background: #fff; border-style: dashed; color: #444; }
+  nav { font-size: .9rem; margin-bottom: 1.5rem; } nav a { color: #0b5cad; }
+</style>
+</head>
+<body>
+<nav><a href="index.html">Tutorials</a> · <a href="hello.html">1</a> · <a href="edit_existing.html">2</a> · <a href="showcase.html">3</a> · <a href="report.html">4</a> · <a href="tables_review.html">5</a> · <a href="forms_fields.html">6</a> · <a href="excel_report.html">7</a> · <a href="excel_dashboard.html">8</a> · <a href="charts.html">9</a> · 10</nav>
+<h1>Tutorial 10: Layouts, tables, shapes and notes in PowerPoint</h1>
+<p class="sub">Office's standard layouts, tables in built-in styles, shapes with fills, speaker
+notes, picture placeholders, reading a slide back, editing tables and links. Script: <code>examples/slides.py</code></p>
+
+<h2>Standard layouts</h2>
+<pre><code class="run">from oox import PresentationDocument
+
+deck = PresentationDocument.new()
+print(len(deck.layout_names), deck.layout_names[2:5])
+slide = deck.add_slide("Two Content")
+deck.set_placeholder_text(slide, "title", "Plan")
+deck.set_placeholder_text(slide, 1, ["Research", (1, "interviews")])
+deck.set_placeholder_text(slide, 2, ["Build", "Launch"])
+print([(t, i) for t, i, _ in deck.placeholders(slide)])</code></pre>
+<pre class="out">11 ['Section Header', 'Two Content', 'Comparison']
+[('title', 0), ('obj', 1), ('obj', 2)]</pre>
+<p>A new deck has Office's eleven layouts with Office's own placeholder positions, scaled
+for the slide size: Title Slide, Title and Content, Section Header, Two Content,
+Comparison, Title Only, Blank, Content with Caption, Picture with Caption and the two
+vertical-text layouts. <code>PresentationDocument.new(layouts="basic")</code> gives only
+Title Slide, Title and Content and Blank. Placeholders are addressed by index when a
+layout has several of the same kind.</p>
+
+<h2>Tables</h2>
+<pre><code class="run">from oox.units import Inches
+
+slide = deck.add_slide("Title Only")
+deck.set_placeholder_text(slide, "title", "Results")
+deck.add_table(slide, [["Region", "Q1", "Q2"], ["North", 120, 135], ["South", 95, 110],
+                       ["Total", None, 245]], Inches(1), Inches(2), Inches(8),
+               merges=["A4:B4"], style="Medium Style 2 - Accent 1")
+info = deck.tables(slide)[0]
+print(info["rows"][3], info["merges"], info["style_name"])</code></pre>
+<pre class="out">['Total', '', '245'] ['A4:B4'] Medium Style 2 - Accent 1</pre>
+<p>Tables use PowerPoint's built-in styles, by name (<code>oox.slides.TABLE_STYLES</code>)
+or by GUID. <code>header=</code>, <code>banded=</code> and <code>first_column=</code> switch
+the style's options, as on PowerPoint's Table Design tab. Merges use spreadsheet-style
+ranges: columns A, B, … and rows 1, 2, ….</p>
+
+<h2>Speaker notes</h2>
+<pre><code class="run">deck.set_notes(slide, "Mention that totals are rounded.")
+print(deck.notes(slide))</code></pre>
+<pre class="out">Mention that totals are rounded.</pre>
+<p>The first note creates the notes master, as PowerPoint does. <code>notes()</code> reads
+notes from any deck and returns <code>None</code> for a slide without notes.</p>
+
+<h2>Shapes</h2>
+<pre><code class="run">slide = deck.add_slide("Blank")
+deck.add_shape(slide, "roundRect", Inches(1), Inches(2), Inches(3), Inches(1.2), text="Plan")
+deck.add_shape(slide, "chevron", Inches(4.5), Inches(2), Inches(3), Inches(1.2), text="Build",
+               fill="ED7D31")
+deck.add_shape(slide, "ellipse", Inches(8), Inches(2), Inches(2), Inches(2), text="Done",
+               fill="70AD47", line="375623", line_width=2)
+print([(s["kind"], s["geometry"], s["text"]) for s in deck.shapes(slide)])</code></pre>
+<pre class="out">[('shape', 'roundRect', 'Plan'), ('shape', 'chevron', 'Build'), ('shape', 'ellipse', 'Done')]</pre>
+<p>Shapes: <code>rect</code>, <code>roundRect</code>, <code>ellipse</code>, <code>triangle</code>,
+<code>diamond</code>, <code>hexagon</code>, <code>octagon</code>, the four arrows,
+<code>homePlate</code> and <code>chevron</code>. Fill and line take hex colours or
+<code>None</code>; text is centred and white unless you say otherwise.</p>
+
+<h2>Picture placeholders</h2>
+<pre><code class="run">slide = deck.add_slide("Picture with Caption")
+deck.set_placeholder_text(slide, "title", "The team")
+deck.set_placeholder_text(slide, 2, "Offsite, May 2026")
+deck.set_placeholder_picture(slide, "pic", "chart.png")
+print([s["kind"] for s in deck.shapes(slide)])
+deck.save("plan.pptx")</code></pre>
+<pre class="out">['placeholder', 'picture', 'placeholder']</pre>
+<p>The picture takes the placeholder's place and position, cropped to fill it the way
+PowerPoint does (<code>crop=False</code> stretches it instead). Content placeholders take
+pictures too. <code>shapes()</code> lists what any slide holds: placeholders, text boxes,
+shapes, pictures, tables, charts and groups, with their text.</p>
+
+<h2>Editing a table</h2>
+<pre><code class="run">from oox import open_document
+
+deck = open_document("plan.pptx")
+results = deck.slides[1]
+table = deck.table(results)            # the slide's first table; or by shape name
+table.set_text(1, 1, 125)              # keeps the cell's font and size
+table.add_row(["West", 80, 84], index=3)
+table.add_column(["Q3", 150, 99, 91, None])
+table.delete_row(2)                    # South
+print(table.values())
+print(table.merges())</code></pre>
+<pre class="out">[['Region', 'Q1', 'Q2', 'Q3'], ['North', '125', '135', '150'], ['West', '80', '84', '91'], ['Total', None, '245', '']]
+[(3, 0, 3, 1)]</pre>
+<p><code>deck.table()</code> edits any table: one made by oox, by PowerPoint or by
+python-pptx. Rows and columns are 0-based. New rows and columns copy the formatting of
+their neighbour, the frame grows with them, and merges shrink when a row or column
+through them goes; inserting inside a merge is refused. <code>merge()</code>,
+<code>unmerge()</code>, <code>set_widths()</code> and <code>set_style()</code> do the rest.</p>
+
+<h2>Links</h2>
+<pre><code class="run">slide = deck.add_slide("Title Only")
+deck.set_placeholder_text(slide, "title", "Next steps")
+box = deck.add_textbox(slide, Inches(1), Inches(2), Inches(8), Inches(1),
+                       "Details in the wiki; questions to the team.")
+deck.set_link(slide, box, "https://wiki.example.org/falcon", text="the wiki")
+deck.set_link(slide, box, "mailto:falcon@example.org", text="the team")
+arrow = deck.add_shape(slide, "leftArrow", Inches(1), Inches(4), Inches(2), Inches(1),
+                       text="Results")
+deck.set_link(slide, arrow, results)   # jump to a slide in the show
+for link in deck.links(slide):
+    print(link["text"], link["kind"], link["target"])
+deck.save("plan.pptx")</code></pre>
+<pre class="out">the wiki url https://wiki.example.org/falcon
+the team url mailto:falcon@example.org
+None slide 2</pre>
+<p>A link goes on text (<code>text=</code>, split out of its run if needed) or on the whole
+shape. Targets are URLs, slides, or the show jumps <code>"next"</code>,
+<code>"previous"</code>, <code>"first"</code>, <code>"last"</code> and <code>"end"</code>;
+<code>None</code> removes a link. <code>links()</code> reads them from any deck.</p>
+</body>
+</html>
