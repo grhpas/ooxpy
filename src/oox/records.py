@@ -27,6 +27,8 @@ from .element import OoxElement
 def _plain(value: Any) -> Any:
     if isinstance(value, Record):
         return value.as_dict()
+    if isinstance(value, tuple) and hasattr(value, "_fields"):  # Border, Tab, LineSpacing
+        return type(value)(*(_plain(v) for v in value))
     if isinstance(value, (list, tuple)):
         return type(value)(_plain(v) for v in value)
     if isinstance(value, dict):

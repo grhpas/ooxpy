@@ -7,7 +7,10 @@ This page says what you can rely on between versions, and how changes are made.
 oox follows [semantic versioning](https://semver.org/) from 1.0 on. Until then,
 minor versions (0.5 → 0.6) may still change the public API; every such change is
 listed under **Changed** or **Removed** in the [changelog](changelog.md), with the
-replacement. Patch versions (0.5.0 → 0.5.1) never change the API.
+replacement. Patch versions (0.5.0 → 0.5.1) never change the API, with one
+exception: 0.6.1 carries the fixes from the first review of 0.6.0 in use, some of
+which add to the API or correct a default (each listed under **Changed** in the
+changelog), because 0.6.0 had a single user, who asked for it.
 
 ## What is public
 
@@ -21,7 +24,8 @@ the test suite until it's reviewed and the file is updated deliberately
   `SpreadsheetDocument`, `PresentationDocument`, `OoxDocument` and `OoxElement`;
 - the objects those methods return: `Table`, `Section`, `ListHandle`, `ListItem`,
   `SlideTable`, `Field`, `Caption`, the property sets, `StyleSheet`, `Series`,
-  `Formula`, `CellError`, `Formatting`, `RunFormat`, `ParagraphFormat`, `ImageData`,
+  `Formula`, `CellError`, `Formatting`, `RunFormat`, `ParagraphFormat`,
+  `TableCellFormat`, `ImageData`,
   `Relationships` and `Relationship`;
 - the records the readers return (`oox.records`: `Hyperlink`, `Comment`, `Chart`,
   `PageSetup`, `Shape` …);
@@ -47,7 +51,13 @@ the test suite until it's reviewed and the file is updated deliberately
 - **A plain number is points**; anything else is a `Length` from `oox.units`
   (`Cm(2)`, `Inches(1)`, `Emu(n)`). Readers report points. The one exception is
   Excel's column width, in characters as in Excel. Values far too large to be
-  points are refused with an error that names `Emu()`.
+  points are refused with an error that names `Emu()`. Arithmetic on lengths
+  gives lengths; a length plus a plain number raises `TypeError`, since the
+  number's unit would be ambiguous.
+- **Ids are ints** where the file stores numbers (`ListItem.num_id`,
+  `ParagraphFormat.numbering`), and the methods that take them take the same type.
+- **Readers report what Word shows.** Where Word and the standard disagree (a
+  missing `w:widowControl` is on in Word), the value is Word's, and the docs say so.
 - **Positions and sizes are keywords** (`x`, `y`, `width`, `height`), optional
   where a sensible default exists.
 

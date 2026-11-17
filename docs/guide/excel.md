@@ -153,9 +153,9 @@ requires); table names are unique per workbook. Structured references
 book.add_comment("Sales", "C3", "Storm damage closed two stores.", author="Ada")
 book.add_hyperlink("Sales", "H1", "https://ecma-international.org/", text="About OOXML")
 book.add_hyperlink("Sales", "H2", "#Lookup!A1", text="Region codes")
-print(book.comments("Sales"))
-# {'C3': ('Ada', 'Storm damage closed two stores.')}
-print(book.hyperlinks("Sales"))
+note = book.comments("Sales")["C3"]
+print(note.author, note.text)        # Ada Storm damage closed two stores.
+print({cell: link.target for cell, link in book.hyperlinks("Sales").items()})
 # {'H1': 'https://ecma-international.org/', 'H2': '#Lookup!A1'}
 ```
 
@@ -177,7 +177,7 @@ book.protect_sheet("Sales", allow=("sort", "autoFilter"))
 # sheets can't be added or renamed
 book.protect_workbook(password="secret")
 print(book.workbook_protection())
-# {'structure': True, 'windows': False, 'password': True}
+# WorkbookProtection(structure=True, windows=False, password=True)
 print(book.check_workbook_password("secret"))
 ```
 

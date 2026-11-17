@@ -744,8 +744,8 @@ categories); see `oox.xlcharts.add_chart`.
 
 ```python
 anchor: str = 'E2'
-width: float = 5400000
-height: float = 2700000
+width: float = Emu(5400000)
+height: float = Emu(2700000)
 series_in: str = 'columns'
 name: str | None = None
 ```

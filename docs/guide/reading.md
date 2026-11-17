@@ -49,7 +49,7 @@ text.
 ## Formatting
 
 `doc.formatting()` gives a resolver that answers "how does this look?" for
-paragraphs and runs:
+paragraphs, runs and table cells:
 
 ```python
 from oox.formatting import LineSpacing
@@ -76,7 +76,16 @@ It applies the layers Word applies, in Word's order:
 5. the character style;
 6. direct formatting.
 
-Bold, italic, caps, small caps, strike, double strike and hidden text are *toggle*
+`fmt.explain(p)` (or a run, or a cell) says which layer each value came from, for a
+"reveal formatting" view or for debugging:
+
+```python
+print(fmt.explain(p)["keep_with_next"])   # paragraph style 'heading 2'
+print(fmt.explain(r)["italic"])           # direct formatting
+```
+
+Bold, italic, caps, small caps, strike, double strike, hidden, outline, shadow,
+emboss and imprint text are *toggle*
 properties. A character or table style that turns one on flips what is below it:
 the Strong character style applied to text in a bold heading gives regular text,
 as it does in Word. A paragraph style sets the value, and so does direct formatting.
@@ -102,11 +111,63 @@ A resolver reads the styles once when it is made; after changing styles, make a 
 one. `doc.effective_format(p, r)` is a one-off `fmt.run(r)` (or `fmt.mark(p)`
 without a run).
 
-What isn't modelled: complex-script variants (`w:bCs`, `w:szCs`), indents and
-spacing given in character units or lines, East Asian layout options, frames,
-conditional formatting recorded only in `w:cnfStyle`, and the effect of
-`contextualSpacing` between neighbouring paragraphs (the flag is reported; the
-spacing it suppresses is not subtracted).
+Where Word and the standard disagree, the values are Word's. A paragraph with no
+`w:widowControl` anywhere in its hierarchy has widow control *on*, as Word shows it
+(the standard says off). Tab stop positions (`Tab.position`) are measured from the
+left page margin, not from the paragraph's indent. Outline levels and list levels are
+0-8, as stored; Word's dialogs show 1-9. A highlight is Word's colour name
+(`run.highlight`, "yellow"); `run.highlight_color` gives the hex.
+
+### Fonts for each script
+
+Word keeps four fonts per run and picks one for each character: `font` for ASCII,
+`font_high_ansi` for the rest of Latin, Greek, Cyrillic and most symbols,
+`font_east_asia` and `font_complex` (Arabic, Hebrew, Thai, Indic scripts) for
+theirs. A Greek document often gives Greek text another font than ASCII, so a
+renderer should ask per character:
+
+```python
+g = doc.add_paragraph()
+gr = doc.add_run(g, "Καλημέρα, World", font="Calibri", font_high_ansi="Tahoma")
+greek = doc.formatting().run(gr)
+print(greek.font_for("Κ"), greek.font_for("W"))   # Tahoma Calibri
+```
+
+`font_hint` ("eastAsia" or "cs") moves the characters two scripts share, and a
+right-to-left or complex-script run uses `font_complex` throughout, with
+`bold_complex`, `italic_complex` and `size_complex`. The choice works on whole
+Unicode blocks, which is what Word does except for a few single characters.
+
+### Table cells
+
+`fmt.cell(tc)` resolves a cell's shading, vertical alignment, margins and borders
+through the same layers: the table style and its conditional formats, the row's
+exceptions (`w:tblPrEx`), the table's own properties and the cell's:
+
+```python
+t = doc.add_table([["Region", "Q1"], ["North", "120"]], header_rows=1)
+t.format_cell(0, 0, fill="DDEBF7")
+cell = doc.formatting().cell(t.cell(0, 0))
+print(cell.fill, cell.valign, cell.margins["left"])   # DDEBF7 top 5.4
+print(cell.borders.bottom)                            # Border(style='single', width=0.5, color=None, space=0.0)
+```
+
+`borders` holds the line Word draws on each edge. Where two cells meet, Word draws
+one line, chosen by MS-OI29500's rules: `nil` wins, a missing border loses, then the
+heavier border (width times a number for the style; dotted and dashed weigh 1), then
+the style earlier in Word's list, then the darker colour. With cell spacing there is
+no conflict. The names match `Table.format_cell(fill=, valign=, borders=,
+margins=)`, so a cell's look can be copied.
+
+### What isn't modelled
+
+Indents and spacing given in character units or lines, East Asian layout options,
+frames, conditional formatting recorded only in `w:cnfStyle`, right-to-left tables
+(`w:bidiVisual`; left and right are not swapped), diagonal cell borders, the merged
+look of vertically merged cells (each `w:tc` is reported as stored), theme fonts
+given per script (`a:font script=...`), and the effect of `contextualSpacing`
+between neighbouring paragraphs (the flag is reported; the spacing it suppresses is
+not subtracted).
 
 ## Lists
 
@@ -129,12 +190,20 @@ numbering, levels linked to styles (how headings are usually numbered), and
 counter, as in Word. Headers, footers, notes and comments are included with
 `list_labels(all_stories=True)`; each part has its own counters.
 
-Bullets are often stored as codes in the Symbol or Wingdings fonts; `label` gives
-the character they look like ("•", "▪", "➢") and `raw_label` the stored code.
+`item.num_id` and `item.abstract_id` are ints, the same ids
+`ParagraphFormat.numbering` gives and `oox.numbering.Definitions(doc).levels()` takes.
+
+Bullets are often stored as codes in symbol fonts; `label` gives the character they
+look like ("•", "▪", "➢", "✓") and `raw_label` the stored code. Symbol and the bullet
+shapes of Wingdings, Wingdings 2, Wingdings 3 and Webdings are known. When a code
+isn't, `item.needs_symbol_font` is True: draw `label` in `item.font`.
 Picture bullets have the image element in `item.picture`.
 
-Formats Word draws from other writing systems (Hebrew, Arabic, CJK and others)
-read as decimal numbers.
+Besides the Western formats, labels can be Russian, Hebrew or Arabic letters, Hebrew
+numerals, Arabic-Indic or Thai digits, Japanese kana (aiueo, iroha), CJK digits and
+counting (一〇, 二十一), the heavenly stems and earthly branches, and Korean ganada
+and chosung. Hindi letters, Thai letters and counting, Vietnamese and Korean
+counting and the Japanese legal formats read as decimal numbers.
 
 ## Sections, headers and footers
 
@@ -147,7 +216,8 @@ print(section.shown("header") is None)             # True: Word shows none
 
 `header(kind)` is the section's own header or None; `shown(kind)` follows "Link to
 Previous" back through earlier sections, the way Word decides what a page shows.
-`ensure_header(kind)` creates one.
+It walks back from the section itself, so reading every header of a long document
+stays fast. `ensure_header(kind)` creates one.
 
 ## Pictures
 

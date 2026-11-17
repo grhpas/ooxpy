@@ -229,7 +229,10 @@ class Part:
         if rel.external:
             raise PackageError(f"{rid} of {self.partname} is an external link to {rel.target}")
         name = self.resolve(rel.target)
-        part = self.package.parts.get(name) if self.package is not None else None
+        if self.package is None:
+            raise PackageError(f"{self.partname} is not in a package, so {rid} "
+                               f"({name}) can't be looked up")
+        part = self.package.parts.get(name)
         if part is None:
             raise PackageError(f"{rid} of {self.partname} points to {name}, which is missing")
         return part

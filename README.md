@@ -87,7 +87,7 @@ mkdocs serve
 The [`examples/`](https://github.com/grhpas/ooxpy/tree/main/examples/) folder has ten runnable scripts, each with a short HTML
 tutorial next to it (`examples/index.html`).
 
-**Status:** 0.5.0, the first public release (alpha): the API may still change before
+**Status:** alpha, on PyPI since 0.5.2: the API may still change before
 1.0 ([docs/STABILITY.md](https://github.com/grhpas/ooxpy/blob/main/docs/STABILITY.md)); changes are listed in
 [CHANGELOG.md](https://github.com/grhpas/ooxpy/blob/main/CHANGELOG.md). The design and decision record is
 [docs/ARCHITECTURE.md](https://github.com/grhpas/ooxpy/blob/main/docs/ARCHITECTURE.md), the plan [docs/ROADMAP.md](https://github.com/grhpas/ooxpy/blob/main/docs/ROADMAP.md).

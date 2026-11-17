@@ -47,8 +47,14 @@ Inches(value: float) -> Length
 
 *class*
 
-A length in EMU.  Behaves as an `int` everywhere; arithmetic gives
-plain ints.
+A length in EMU that remembers it is a length.
+
+Arithmetic keeps it a `Length`: `Cm(2) + Cm(1)`, `-Cm(1)`,
+`abs()`, `Cm(2) * 1.5` and `Cm(3) / 2` are all lengths, and
+`sum(lengths)` works.  `Length / Length` is a plain ratio.  Adding a
+plain number other than 0 raises `TypeError`, because oox reads a plain
+number as points: write `Cm(2) + Pt(6)`.  Anywhere else it behaves as an
+`int` count of EMU.
 
 ### `Mm`
 

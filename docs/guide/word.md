@@ -40,11 +40,19 @@ Every length is in points, as in Word's dialogs; a length from `oox.units` (`Cm(
 
 `add_run` takes `bold`, `italic`, `underline`, `strike`, `double_strike`, `size`, `font`,
 `color`, `highlight`, `superscript`, `subscript`, `caps`, `small_caps`, `shading`,
-`letter_spacing`, `hidden`, `language`, `border` and a character `style`.
+`letter_spacing`, `hidden`, `language`, `border` and a character `style`, and the
+less common `position` (raised or lowered, in points), `scale` (%), `kerning`,
+`emphasis`, `outline`, `shadow`, `emboss`, `imprint`, `right_to_left`,
+`complex_script`, `bold_complex`, `italic_complex`, `size_complex`, and one script's
+font: `font_high_ansi` (Greek, Cyrillic, accented Latin), `font_east_asia`,
+`font_complex` and `font_hint` (`font` sets all four). `highlight` is one of Word's
+colour names ("yellow") or its hex value (`oox.formatting.HIGHLIGHT_COLORS`).
 `format_paragraph` takes `align`, `space_before`/`space_after`, `line_spacing`,
 `indent_left`, `indent_right`, `first_line` (negative for a hanging indent),
 `keep_with_next`, `keep_together`, `page_break_before`, `widow_control`,
-`contextual_spacing`, `outline_level`, `shading`, `borders` and `tabs`:
+`contextual_spacing`, `outline_level`, `shading`, `borders`, `tabs`,
+`right_to_left` and `suppress_hyphens`. A tab stop's position is measured from the
+left margin:
 
 ```python
 from oox.formatting import Border, LineSpacing, Tab
@@ -143,9 +151,9 @@ doc.add_footnote(p, "Fourth edition, 2012.")
 doc.add_endnote(p, "See the sources list.")
 doc.add_comment(p, "Check the edition with legal.", author="Ada Lovelace")
 
-print(doc.hyperlinks())
-# [('ECMA-376', 'https://ecma-international.org/'), ('the appendix', '#appendix')]
-print(doc.footnotes())          # [(1, 'Fourth edition, 2012.')]
+print([(link.text, link.target or link.anchor) for link in doc.hyperlinks()])
+# [('ECMA-376', 'https://ecma-international.org/'), ('the appendix', 'appendix')]
+print(doc.footnotes())          # [Note(id=1, text='Fourth edition, 2012.')]
 print(doc.comments()[0].author)
 ```
 

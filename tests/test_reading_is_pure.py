@@ -46,8 +46,11 @@ def _resolve_all(doc):
     from oox.walk import P, W, iter_story
 
     fmt = doc.formatting()
-    return [(fmt.paragraph(p), fmt.mark(p), [fmt.run(r) for r in iter_story(p, f"{{{W}}}r")])
-            for p in iter_story(doc.body, P)]
+    out = [(fmt.paragraph(p), fmt.mark(p), fmt.explain(p),
+            [(fmt.run(r), fmt.explain(r)) for r in iter_story(p, f"{{{W}}}r")])
+           for p in iter_story(doc.body, P)]
+    out += [(fmt.cell(tc), fmt.explain(tc)) for tc in iter_story(doc.body, f"{{{W}}}tc")]
+    return out
 
 
 WORD_READERS: dict[str, Reader] = {

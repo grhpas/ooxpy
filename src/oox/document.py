@@ -713,10 +713,11 @@ class WordprocessingDocument(OoxDocument):
                          **fmt)
 
     def formatting(self):
-        """A ``Formatting`` resolver: ``.paragraph(p)``, ``.run(r)`` and
-        ``.mark(p)`` give the formatting Word shows, through document
-        defaults, table styles, paragraph styles, numbering, character styles
-        and direct formatting.  It indexes the styles once; make another after
+        """A ``Formatting`` resolver: ``.paragraph(p)``, ``.run(r)``,
+        ``.mark(p)`` and ``.cell(tc)`` give the formatting Word shows, through
+        document defaults, table styles, paragraph styles, numbering,
+        character styles and direct formatting; ``.explain(el)`` says where
+        each value came from.  It indexes the styles once; make another after
         changing them.  See ``oox.resolve``."""
         from .resolve import Formatting
 

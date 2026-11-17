@@ -66,9 +66,25 @@ that pass raw EMU, or old oox code passing twips, is caught where it matters: ea
 setting checks a plausible range (Word pages at most 22 inches, drawings at most
 56 inches; margins must leave room on the page) and the error names `Emu()`.
 
+**Added in 0.6.1:** arithmetic keeps a `Length` a `Length` (`Cm(2) + Cm(1)`,
+`Cm(2) * 1.5`, `sum(...)`); in 0.6.0 it gave a plain `int`, which then read as
+points. A `Length` plus a plain number raises `TypeError`, since nothing says
+whether the number is points or EMU.
+
 ## 6. Smaller ones
 
 - **6a.** `doc.effective_format(p, r)` stays as the obvious shortcut for
   `doc.formatting().run(r)`; no more shortcuts are added.
 - **6b.** `oox.grammar.URI` stays internal; `oox.ns` constants (`W`, `A`, `R` …)
   and `qn()` are the public way.
+
+## 7. Added in 0.6.1, after the first review of 0.6.0 in use
+
+- **7a. Readers report what Word shows, where Word and the standard differ.** A
+  paragraph without `w:widowControl` anywhere in its hierarchy has widow control
+  on (Word), not off (the standard). Such cases are documented where they apply.
+- **7b. Ids are ints** where the file stores numbers, and every method that takes
+  an id takes the type the readers give (it also accepts the XML's string form).
+- **7c. One resolver for paragraphs, runs and table cells**, with `explain()`
+  saying which layer each value came from; cell records use `Table.format_cell`'s
+  names (`fill`, `valign`, `borders`, `margins`).

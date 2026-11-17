@@ -201,9 +201,108 @@ def _ordinal(n: int) -> str:
     return f"{n}{suffix}"
 
 
+_RUSSIAN = "абвгдежзиклмнопрстуфхцчшщэюя"  # Word skips ё й ъ ы ь
+_HEBREW_ALPHABET = "אבגדהוזחטיכלמנסעפצקרשת"
+_HEBREW_ONES = " אבגדהוזחט"
+_HEBREW_TENS = " יכלמנסעפצ"
+_HEBREW_HUNDREDS = " קרשת"
+_ARABIC_ALPHA = "أبتثجحخدذرزسشصضطظعغفقكلمنهوي"
+_ARABIC_ABJAD = "أبجدهوزحطيكلمنسعفصقرشتثخذضظغ"
+_AIUEO = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン"
+_IROHA = "イロハニホヘトチリヌルヲワカヨタレソツネナラムウヰノオクヤマケフコエテアサキユメミシヱヒモセス"
+# full-width katakana -> half-width (ヰ and ヱ have no half-width form)
+_HALF_KANA = dict(zip("アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン",
+                      "ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜｦﾝ", strict=True))
+_CJK_DIGITS = "〇一二三四五六七八九"
+_STEMS = "甲乙丙丁戊己庚辛壬癸"
+_BRANCHES = "子丑寅卯辰巳午未申酉戌亥"
+_GANADA = "가나다라마바사아자차카타파하"
+_CHOSUNG = "ㄱㄴㄷㄹㅁㅂㅅㅇㅈㅊㅋㅌㅍㅎ"
+_DIGITS = {"hindiNumbers": "٠١٢٣٤٥٦٧٨٩", "arabicIndic": "٠١٢٣٤٥٦٧٨٩",
+           "thaiNumbers": "๐๑๒๓๔๕๖๗๘๙", "ideographDigital": _CJK_DIGITS,
+           "decimalFullWidth": "０１２３４５６７８９",
+           "decimalFullWidth2": "０１２３４５６７８９"}
+_CYCLES = {"aiueoFullWidth": _AIUEO, "irohaFullWidth": _IROHA,
+           "aiueo": "".join(_HALF_KANA[c] for c in _AIUEO),
+           "iroha": "".join(_HALF_KANA.get(c, c) for c in _IROHA),
+           "ideographTraditional": _STEMS, "ideographZodiac": _BRANCHES,
+           "ganada": _GANADA, "chosung": _CHOSUNG}
+
+
+def _repeat_letters(n: int, alphabet: str) -> str:
+    """a..z, aa..zz: Word's way of going past the end of an alphabet."""
+    if n <= 0:
+        return ""
+    size = len(alphabet)
+    return alphabet[(n - 1) % size] * ((n - 1) // size + 1)
+
+
+def _hebrew(n: int) -> str:
+    """Hebrew numerals (gematria), as Word's hebrew1: 15 is טו, 16 is טז."""
+    if not 0 < n < 1000:
+        return str(n)
+    out = "ת" * (n // 400)
+    rest = n % 400
+    out += _HEBREW_HUNDREDS[rest // 100].strip()
+    rest %= 100
+    if rest in (15, 16):
+        return out + "ט" + _HEBREW_ONES[rest - 9]
+    return out + _HEBREW_TENS[rest // 10].strip() + _HEBREW_ONES[rest % 10].strip()
+
+
+def _cjk_counting(n: int, chinese: bool) -> str:
+    """Counting with 十 百 千: 十一, 二十, 百 (Japanese) or 一百零一 (Chinese)."""
+    if not 0 < n < 10000:
+        return str(n)
+    out, gap = "", False
+    for size, unit in ((1000, "千"), (100, "百"), (10, "十")):
+        d = n // size % 10
+        if d:
+            if gap and chinese:
+                out += "零"
+            lead = d > 1 or (chinese and (out or size > 10))
+            out += (_CJK_DIGITS[d] if lead else "") + unit
+            gap = False
+        elif out:
+            gap = True
+    if n % 10:
+        if gap and chinese and out:
+            out += "零"
+        out += _CJK_DIGITS[n % 10]
+    return out
+
+
 def format_number(n: int, fmt: str) -> str:
-    """``n`` in a ``w:numFmt`` format.  Formats Word draws from other writing
-    systems (Hebrew, Arabic, CJK ...) fall back to decimal."""
+    """``n`` in a ``w:numFmt`` format.  Besides the Western formats this
+    knows Russian, Hebrew and Arabic letters and numerals, Arabic-Indic and
+    Thai digits, the Japanese kana orders (aiueo, iroha), CJK digits and
+    counting, heavenly stems and earthly branches, and Korean ganada and
+    chosung.  Others (Hindi letters, Thai letters and counting, Vietnamese
+    and Korean counting, Japanese legal ...) fall back to decimal."""
+    if fmt in _DIGITS:
+        return "".join(_DIGITS[fmt][int(d)] for d in str(n))
+    if fmt in _CYCLES:
+        alphabet = _CYCLES[fmt]
+        return alphabet[(n - 1) % len(alphabet)] if n > 0 else ""
+    if fmt == "russianLower":
+        return _repeat_letters(n, _RUSSIAN)
+    if fmt == "russianUpper":
+        return _repeat_letters(n, _RUSSIAN).upper()
+    if fmt == "hebrew1":
+        return _hebrew(n)
+    if fmt == "hebrew2":
+        return _repeat_letters(n, _HEBREW_ALPHABET)
+    if fmt == "arabicAlpha":
+        return _repeat_letters(n, _ARABIC_ALPHA)
+    if fmt == "arabicAbjad":
+        return _repeat_letters(n, _ARABIC_ABJAD)
+    if fmt in ("japaneseCounting", "chineseCounting", "chineseCountingThousand",
+               "taiwaneseCounting", "taiwaneseCountingThousand"):
+        return _cjk_counting(n, chinese=not fmt.startswith("japanese"))
+    if fmt in ("ideographEnclosedCircle",) and 1 <= n <= 10:
+        return chr(0x3220 + n - 1)
+    if fmt == "decimalEnclosedCircleChinese":
+        fmt = "decimalEnclosedCircle"
     if fmt == "lowerLetter":
         return _letters(n)
     if fmt == "upperLetter":
@@ -230,8 +329,6 @@ def format_number(n: int, fmt: str) -> str:
         return f"{n}."
     if fmt == "decimalEnclosedCircle" and 1 <= n <= 20:
         return chr(0x2460 + n - 1)
-    if fmt == "decimalFullWidth":
-        return "".join(chr(0xFF10 + int(d)) for d in str(n))
     if fmt == "numberInDash":
         return f"- {n} -"
     if fmt == "none":
@@ -239,11 +336,24 @@ def format_number(n: int, fmt: str) -> str:
     return str(n)  # decimal and the formats we don't model
 
 
-# Bullet characters stored in symbol fonts (in the U+F0xx private range, or as the
-# plain code) and the Unicode character that looks the same.
-_SYMBOL_GLYPHS = {
-    ("symbol", 0xB7): "\u2022",      # •
-    ("symbol", 0xA8): "\u2666",      # ♦
+# Characters stored in symbol fonts (in the U+F0xx private range, or as the plain
+# code) and the Unicode character that looks the same: Symbol's Greek letters and
+# common signs, and the shapes used as bullets in the Wingdings fonts and Webdings
+# (after Unicode 7.0's mapping of those fonts).
+def _table(family: str, start: int, chars: str) -> dict[tuple[str, int], str]:
+    return {(family, start + i): ch for i, ch in enumerate(chars) if ch != " "}
+
+
+_SYMBOL_GLYPHS: dict[tuple[str, int], str] = {
+    **_table("symbol", 0x41, "ΑΒΧΔΕΦΓΗΙϑΚΛΜΝΟΠΘΡΣΤΥςΩΞΨΖ"),
+    **_table("symbol", 0x61, "αβχδεφγηιϕκλμνοπθρστυϖωξψζ"),
+    **_table("symbol", 0xA1, "ϒ′≤⁄∞ƒ♣♦♥♠↔←↑→↓°±″≥×∝∂•÷≠≡≈…"),
+    **_table("symbol", 0xC0, "ℵℑℜ℘⊗⊕∅∩∪⊃⊇⊄⊂⊆∈∉∠∇"),
+    **_table("symbol", 0xD5, "∏√⋅¬∧∨⇔⇐⇑⇒⇓◊〈"),
+    ("symbol", 0x22): "∀", ("symbol", 0x24): "∃", ("symbol", 0x27): "∋",
+    ("symbol", 0x2A): "∗", ("symbol", 0x2D): "−", ("symbol", 0x40): "≅",
+    ("symbol", 0x5C): "∴", ("symbol", 0x5E): "⊥", ("symbol", 0x7E): "∼",
+    ("symbol", 0xE5): "∑", ("symbol", 0xF1): "〉", ("symbol", 0xF2): "∫",
     ("wingdings", 0xA7): "\u25aa",   # ▪
     ("wingdings", 0xD8): "\u27a2",   # ➢
     ("wingdings", 0xFC): "\u2714",   # ✔
@@ -251,23 +361,71 @@ _SYMBOL_GLYPHS = {
     ("wingdings", 0x71): "\u2751",   # ❑
     ("wingdings", 0x6E): "\u25a0",   # ■
     ("wingdings", 0x6C): "\u25cf",   # ●
+    **_table("wingdings 2", 0x4F, "🗴✓🗵☑☒☒⮾⮿"),
+    **_table("wingdings 2", 0x69, "⓪①②③④⑤⑥⑦⑧⑨⑩⓿❶❷❸❹❺❻❼❽❾❿"),
+    **_table("wingdings 2", 0x95, "•●⚫⬤"),
+    **_table("wingdings 2", 0x9E, "⦿◾■◼⬛⬜"),
+    **_table("wingdings 2", 0xAC, "⬩⬥◆◇"),
+    **_table("wingdings 2", 0xB5, "⬪⬧⧫◊"),
+    ("wingdings 2", 0xA8): "▣", ("wingdings 2", 0xB1): "◈", ("wingdings 2", 0xBA): "◖",
+    ("wingdings 2", 0xBB): "◗", ("wingdings 2", 0xBE): "◼", ("wingdings 2", 0xBF): "⬥",
+    ("wingdings 2", 0xE8): "✦", ("wingdings 2", 0xEA): "★", ("wingdings 2", 0xEB): "✶",
+    ("wingdings 2", 0xED): "✷", ("wingdings 2", 0xF0): "✹", ("wingdings 2", 0xF3): "✯",
+    ("wingdings 2", 0xF8): "※", ("wingdings 2", 0xF9): "⁂",
+    **_table("wingdings 3", 0x21, "⭠⭢⭡⭣"),
+    **_table("wingdings 3", 0x66, "←→↑↓↖↗↙↘"),
+    **_table("wingdings 3", 0x70, "▲▼△▽◄►◁▷◣◢◤◥"),
+    **_table("wingdings 3", 0x81, "▲▼◀▶⮜⮞⮝⮟"),
+    **_table("webdings", 0x33, "⏴⏵⏶⏷⏪⏩⏮⏭⏸⏹⏺"),
+    ("webdings", 0x61): "✔", ("webdings", 0x63): "□", ("webdings", 0x67): "■",
+    ("webdings", 0x6E): "⚫", ("webdings", 0x73): "❓", ("webdings", 0x79): "⊖",
+    ("webdings", 0x98): "✯",
 }
+SYMBOL_FONTS = frozenset(family for family, _ in _SYMBOL_GLYPHS)
 
 
 def readable_text(text: str, font: str | None) -> str:
-    """``text`` with symbol-font bullets replaced by the Unicode character
-    that looks the same ("\\uf0b7" in Symbol becomes "•")."""
-    family = (font or "").strip().lower()
+    """``text`` with symbol-font characters replaced by the Unicode character
+    that looks the same ("\\uf0b7" in Symbol becomes "•"; "a" in Symbol "α").
+    Knows Symbol, and the bullet shapes of Wingdings, Wingdings 2, Wingdings 3
+    and Webdings.  A character it doesn't know stays as it is: check with
+    ``needs_symbol_font()`` and draw those in ``font``."""
+    family = " ".join((font or "").lower().split())
     out = []
     for ch in text:
         code = ord(ch)
         if 0xF000 <= code <= 0xF0FF:
             code -= 0xF000
-        elif family not in ("symbol", "wingdings"):
+        elif family not in SYMBOL_FONTS:
             out.append(ch)
             continue
         out.append(_SYMBOL_GLYPHS.get((family, code), ch))
     return "".join(out)
+
+
+def needs_symbol_font(text: str) -> bool:
+    """Whether ``text`` still holds private-use characters (U+E000-U+F8FF),
+    such as a symbol-font code ``readable_text()`` couldn't convert: those
+    show correctly only in the original symbol font."""
+    return any(0xE000 <= ord(ch) <= 0xF8FF for ch in text)
+
+
+def _id_int(value: str | None) -> int | None:
+    """A numbering id as an int; None when absent or not a number."""
+    try:
+        return int(value) if value is not None else None
+    except ValueError:
+        return None
+
+
+def _id_key(value: int | str | None) -> str:
+    """The key an id is indexed under: ``7``, ``"7"`` and ``"07"`` all give "7"."""
+    if isinstance(value, bool) or not isinstance(value, (int, str, type(None))):
+        raise TypeError(f"a numbering id is an int, not {type(value).__name__}")
+    if isinstance(value, int):
+        return str(value)
+    number = _id_int(value)
+    return str(number) if number is not None else (value or "")
 
 
 def _child(parent: OoxElement | None, qname: str) -> OoxElement | None:
@@ -311,9 +469,9 @@ class Definitions:
     def __init__(self, doc: WordprocessingDocument) -> None:
         root = doc.numbering
         self.root = root
-        self.abstracts = {e.get(f"{{{W}}}abstractNumId"): e for e in
+        self.abstracts = {_id_key(e.get(f"{{{W}}}abstractNumId")): e for e in
                           (root.iterchildren(f"{{{W}}}abstractNum") if root is not None else [])}
-        self.nums = {e.get(f"{{{W}}}numId"): e for e in
+        self.nums = {_id_key(e.get(f"{{{W}}}numId")): e for e in
                      (root.iterchildren(f"{{{W}}}num") if root is not None else [])}
         styles = doc.styles
         self.styles = {s.get(f"{{{W}}}styleId"): s for s in
@@ -321,15 +479,16 @@ class Definitions:
         self.default_style = next(
             (sid for sid, st in self.styles.items() if st.get(f"{{{W}}}type") == "paragraph"
              and st.get(f"{{{W}}}default") in ("1", "true", "on")), None)
-        self._levels: dict[str, tuple[str, list[Level], dict[int, int]] | None] = {}
+        self._levels: dict[str, tuple[int, list[Level], dict[int, int]] | None] = {}
 
     def _abstract_id(self, num_id: str | None) -> str | None:
-        return _val(_child(self.nums.get(num_id or ""), "w:abstractNumId"))
+        found = _val(_child(self.nums.get(_id_key(num_id)), "w:abstractNumId"))
+        return _id_key(found) if found is not None else None
 
     def _resolved_abstract(self, abstract_id: str | None, depth: int = 0) -> str | None:
         """Follow ``numStyleLink`` (a list that uses a numbering style) to the
         abstractNum that holds the levels (the one with ``styleLink``)."""
-        abstract = self.abstracts.get(abstract_id or "")
+        abstract = self.abstracts.get(_id_key(abstract_id))
         link = _val(_child(abstract, "w:numStyleLink"))
         if link is None or depth > 5:
             return abstract_id
@@ -338,15 +497,19 @@ class Definitions:
         target = self._abstract_id(num_id)
         return self._resolved_abstract(target, depth + 1) if target is not None else abstract_id
 
-    def levels(self, num_id: str) -> tuple[str, list[Level], dict[int, int]] | None:
-        """(abstractNumId holding the levels, the nine levels, {level: startOverride})."""
-        if num_id in self._levels:
-            return self._levels[num_id]
-        num = self.nums.get(num_id)
-        abstract_id = self._resolved_abstract(self._abstract_id(num_id))
-        abstract = self.abstracts.get(abstract_id or "")
+    def levels(self, num_id: int | str) -> tuple[int, list[Level], dict[int, int]] | None:
+        """(abstractNumId holding the levels, the nine levels, {level: startOverride})
+        for list ``num_id`` -- an int as ``ListItem.num_id`` and
+        ``ParagraphFormat.numbering`` give it (the XML's string form works too)."""
+        key = _id_key(num_id)
+        if key in self._levels:
+            return self._levels[key]
+        num = self.nums.get(key)
+        abstract_key = self._resolved_abstract(self._abstract_id(key))
+        abstract = self.abstracts.get(abstract_key or "")
+        abstract_id = _id_int(abstract_key)
         if num is None or abstract_id is None or abstract is None:
-            self._levels[num_id] = None
+            self._levels[key] = None
             return None
         defined = {int(lv.get(f"{{{W}}}ilvl", "0")): lv
                    for lv in abstract.iterchildren(f"{{{W}}}lvl")}
@@ -361,8 +524,8 @@ class Definitions:
             so = ov.first("w:startOverride")
             if so is not None:
                 overrides[i] = int(_val(so, "1") or 1)
-        self._levels[num_id] = (abstract_id, result, overrides)
-        return self._levels[num_id]
+        self._levels[key] = (abstract_id, result, overrides)
+        return self._levels[key]
 
     def _style_chain(self, style_id: str | None) -> list[OoxElement]:
         chain: list[OoxElement] = []
@@ -374,7 +537,7 @@ class Definitions:
             style_id = _val(_child(st, "w:basedOn"))
         return chain  # the style first, then what it is based on
 
-    def numbering_of(self, ppr: OoxElement | None) -> tuple[str, int, bool] | None:
+    def numbering_of(self, ppr: OoxElement | None) -> tuple[int, int, bool] | None:
         """(numId, level, from_style) for a paragraph's ``w:pPr``, or None when
         the paragraph isn't in a list.  ``from_style`` says the numbering
         comes from the paragraph style rather than the paragraph."""
@@ -388,8 +551,8 @@ class Definitions:
         if num_el is None:
             num_el = next((e for e in (_child(n, "w:numId") for n in style_npr) if e is not None),
                           None)
-        num_id = _val(num_el)
-        if num_id is None or num_id == "0":  # numId 0 = explicitly not numbered
+        num_id = _id_int(_val(num_el))
+        if num_id is None or num_id == 0:  # numId 0 = explicitly not numbered
             return None
         ilvl_el = _child(npr, "w:ilvl")
         if ilvl_el is None:
@@ -445,6 +608,12 @@ class ListItem:
     def is_bullet(self) -> bool:
         return self.format == "bullet"
 
+    @property
+    def needs_symbol_font(self) -> bool:
+        """Whether ``label`` still has symbol-font codes ``readable_text``
+        couldn't convert: draw it in ``font``."""
+        return needs_symbol_font(self.label)
+
 
 _STORIES = (("header", "HeaderPart"), ("footer", "FooterPart"), ("footnotes", "FootnotesPart"),
             ("endnotes", "EndnotesPart"), ("comments", "WordprocessingCommentsPart"))
@@ -474,8 +643,8 @@ def list_labels(doc: WordprocessingDocument, *, all_stories: bool = False) -> li
         return []
     out: list[ListItem] = []
     for story, root in _story_roots(doc, all_stories):
-        seen_nums: set[str] = set()
-        counters: dict[str, list[int | None]] = {}
+        seen_nums: set[int] = set()
+        counters: dict[int, list[int | None]] = {}
         for p in iter_story(root, f"{{{W}}}p"):
             found = defs.numbering_of(p.first("w:pPr"))
             if found is None:
@@ -510,7 +679,7 @@ def list_labels(doc: WordprocessingDocument, *, all_stories: bool = False) -> li
                         raw = raw.replace(f"%{k}", format_number(cnt[k - 1] or 0, fmt))
             out.append(ListItem(
                 paragraph=p, label=readable_text(raw, lvl.font), level=ilvl,
-                num_id=int(num_id), abstract_id=int(abstract_id), format=lvl.fmt,
+                num_id=num_id, abstract_id=abstract_id, format=lvl.fmt,
                 font=lvl.font, suffix=lvl.suffix, raw_label=raw,
                 picture=defs.picture(lvl.picture_id), story=story))
     return out

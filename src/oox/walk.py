@@ -109,6 +109,53 @@ def iter_blocks(container: OoxElement, *tags: str) -> Iterator[OoxElement]:
                 stack.append(iter(branch))
 
 
+def _reversed_blocks(el: OoxElement, wanted: frozenset[str]) -> Iterator[OoxElement]:
+    tag = el.tag
+    if tag in wanted:
+        yield el
+    elif tag in _BLOCK_WRAPPERS:
+        for child in reversed(el):
+            yield from _reversed_blocks(child, wanted)
+    elif tag == ALTERNATE:
+        branch = chosen_branch(el)
+        if branch is not None:
+            for child in reversed(branch):
+                yield from _reversed_blocks(child, wanted)
+
+
+def blocks_before(container: OoxElement, el: OoxElement, *tags: str) -> Iterator[OoxElement]:
+    """The blocks ``iter_blocks(container, *tags)`` gives before ``el``, nearest
+    first, without walking the rest of ``container``.  ``el`` is one of its
+    blocks or a direct child of ``container`` (see ``is_block``)."""
+    wanted = frozenset(tags or (P, TBL))
+    node = el
+    while node is not container:
+        if node.tag not in (CHOICE, FALLBACK):  # never step into the other branches
+            for sibling in node.itersiblings(preceding=True):
+                yield from _reversed_blocks(sibling, wanted)
+        parent = node.getparent()
+        if parent is None:
+            return
+        node = parent
+
+
+def is_block(container: OoxElement, el: OoxElement) -> bool:
+    """Whether ``iter_blocks(container)`` reaches ``el``: every element between
+    them is a content control, custom XML or the chosen branch of an
+    ``mc:AlternateContent``."""
+    child = el
+    for anc in el.iterancestors():
+        if anc is container:
+            return True
+        if anc.tag == ALTERNATE:
+            if child is not chosen_branch(anc):
+                return False
+        elif anc.tag not in _BLOCK_WRAPPERS and anc.tag not in (CHOICE, FALLBACK):
+            return False
+        child = anc
+    return False
+
+
 def in_fallback(el: OoxElement) -> bool:
     """Whether ``el`` sits in a branch of ``mc:AlternateContent`` that a reader
     doesn't show (a fallback, or a choice not taken)."""

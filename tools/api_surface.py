@@ -41,7 +41,7 @@ CLASSES = [
     "oox.spreadsheet.Formula", "oox.spreadsheet.CellError",
     "oox.formatting.LineSpacing", "oox.formatting.Border", "oox.formatting.Borders",
     "oox.formatting.Tab", "oox.resolve.Formatting", "oox.resolve.RunFormat",
-    "oox.resolve.ParagraphFormat", "oox.numbering.ListItem", "oox.document.ImageData",
+    "oox.resolve.ParagraphFormat", "oox.resolve.TableCellFormat", "oox.numbering.ListItem", "oox.document.ImageData",
     "oox.opc.Relationships", "oox.opc.Relationship",
     *(f"oox.records.{n}" for n in (
         "Record", "Hyperlink", "Comment", "Chart", "CellFormat", "Note", "ContentControl",

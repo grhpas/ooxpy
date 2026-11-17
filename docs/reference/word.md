@@ -220,7 +220,8 @@ indent_left / indent_right / first_line (pt or a `Length`; negative
 first_line = hanging), keep_with_next, keep_together, page_break_before,
 widow_control, contextual_spacing, outline_level (0-8), shading (hex
 fill), borders (`Borders` or {"bottom": Border(), ...}), tabs (`Tab`
-stops; replaces the paragraph's own).
+stops; replaces the paragraph's own), right_to_left, suppress_hyphens
+(Word's "Don't hyphenate").
 
 #### `add_style`
 
@@ -268,21 +269,25 @@ contents lines.
 formatting()
 ```
 
-A `Formatting` resolver: `.paragraph(p)`, `.run(r)` and
-`.mark(p)` give the formatting Word shows, through document
-defaults, table styles, paragraph styles, numbering, character styles
-and direct formatting.  It indexes the styles once; make another after
+A `Formatting` resolver: `.paragraph(p)`, `.run(r)`,
+`.mark(p)` and `.cell(tc)` give the formatting Word shows, through
+document defaults, table styles, paragraph styles, numbering,
+character styles and direct formatting; `.explain(el)` says where
+each value came from.  It indexes the styles once; make another after
 changing them.  See `oox.resolve`.
 
 **Details** (from `oox.resolve`)
 
-What Word shows: the effective formatting of paragraphs and runs.
+What Word shows: the effective formatting of paragraphs, runs and table cells.
 
 ```python
 fmt = doc.formatting()
 pf = fmt.paragraph(p)     # ParagraphFormat(style='Heading 1', align='left', ...)
 rf = fmt.run(r)           # RunFormat(bold=True, size=16.0, font='Calibri Light', ...)
 fmt.mark(p)               # the paragraph mark's RunFormat
+fmt.cell(tc)              # TableCellFormat(fill='DDDDDD', borders=..., margins=...)
+rf.font_for("α")          # the font Word uses for that character
+fmt.explain(p)            # {"align": "paragraph style 'Heading 1'", ...}
 ```
 
 Values are in points and in the forms the writers take (`LineSpacing`,
@@ -303,8 +308,11 @@ Word builds formatting in layers, each overriding the one before (Word's
 5. the character style, for runs;
 6. direct formatting.
 
+`explain()` says which of these layers each value came from.
+
 Toggle properties (bold, italic, caps, small caps, strike, double strike,
-hidden): within a style's `basedOn` chain the nearest value wins; a table or
+hidden, outline, shadow, emboss, imprint, and the complex-script bold and
+italic): within a style's `basedOn` chain the nearest value wins; a table or
 character style that turns one on flips the value below it (bold in a
 character style applied to bold text gives regular text, as in Word); a
 paragraph style sets the value outright (MS-OI29500 2.1.258: Word resets
@@ -316,9 +324,26 @@ paragraph style's font size comes from the default paragraph style and is 11
 or 12 pt, or its alignment comes from there and is left, the table style's
 value is kept.
 
-Not modelled: complex-script variants (`w:bCs`, `w:szCs`), character-unit
-indents and `beforeLines`/`afterLines` spacing, East Asian layout,
-frames, conditional formatting recorded only in `w:cnfStyle`.
+Where Word and the standard differ, the values are Word's: a paragraph
+without `w:widowControl` anywhere in its hierarchy has widow control on.
+
+Table cells (`cell()`): borders come from the cell's own `w:tcBorders`,
+then the table style's cell borders (whole table, then each conditional
+format, mapped to the cell's edges: a region's outer edge or its inside
+lines), then the row's `w:tblPrEx` and the table's `w:tblBorders`.
+Between two cells, with no cell spacing, the border Word draws is chosen as
+MS-OI29500 2.1.169 says: `nil` wins, then `none` loses, then the heavier
+border (width x style number; dotted and dashed weigh 1), then the style
+earlier in Word's list, then the darker colour, then the cell above or to
+the left.  Margins, shading and vertical alignment go through the same
+layers.
+
+Not modelled: character-unit indents and `beforeLines`/`afterLines`
+spacing, East Asian layout, frames, conditional formatting recorded only in
+`w:cnfStyle`, right-to-left tables (`w:bidiVisual`: left and right are
+not swapped), diagonal cell borders, the merged look of vertically merged
+cells (each `w:tc` is reported as stored), and fonts that the theme gives
+per script (`a:font script=...`).
 
 A resolver indexes the styles when it is made and does not see later edits
 to them; make another one after changing styles.  Reading never changes the
@@ -647,8 +672,8 @@ add_chart(
     categories,
     series,
     *,
-    width: float = 5400000,
-    height: float = 2700000,
+    width: float = Emu(5400000),
+    height: float = Emu(2700000),
     paragraph: OoxElement | None = None,
     descr: str = '',
     **options,
@@ -682,8 +707,8 @@ returns its `w:r`.  See `oox.textboxes.add_text_box`.
 **Options** (keywords)
 
 ```python
-width: float = 2160000
-height: float = 1080000
+width: float = Emu(2160000)
+height: float = Emu(1080000)
 x: float = 0
 y: float = 0
 h_relative: str = 'column'
@@ -1123,11 +1148,16 @@ format_cell(
     valign: str | None = None,
     align: str | None = None,
     bold: bool | None = None,
+    borders: Any = None,
+    margins: dict[str, float] | None = None,
 ) -> OoxElement
 ```
 
 Shading (hex colour), vertical alignment (top/center/bottom),
-paragraph alignment (left/center/right/justify), bold.
+paragraph alignment (left/center/right/justify), bold; `borders`
+(`Borders` or {"top": Border(...), ...}; None on a side removes that
+line, as "nil") and `margins` ({"left": 4, ...} in points), the
+names `doc.formatting().cell(tc)` reports.
 
 ### `header_rows`
 

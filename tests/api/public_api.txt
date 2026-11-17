@@ -30,7 +30,7 @@ class oox.document.WordprocessingDocument(OoxDocument)
   .addPictureFromString(self, content: 'bytes', mediatype: 'str | None' = None) -> 'str'
   .add_bookmark(self, name: 'str', paragraph: 'OoxElement') -> 'OoxElement'
   .add_caption(self, text: 'str', label: 'str' = 'Figure', *, before: 'OoxElement | None' = None, after: 'OoxElement | None' = None, sep: 'str' = ': ')
-  .add_chart(self, kind: 'str', categories, series, *, width: 'float' = 5400000, height: 'float' = 2700000, paragraph: 'OoxElement | None' = None, descr: 'str' = '', **options) -> 'OoxElement'
+  .add_chart(self, kind: 'str', categories, series, *, width: 'float' = Emu(5400000), height: 'float' = Emu(2700000), paragraph: 'OoxElement | None' = None, descr: 'str' = '', **options) -> 'OoxElement'
   .add_checkbox(self, paragraph: 'OoxElement', *, tag: 'str', checked: 'bool' = False, title: 'str | None' = None) -> 'OoxElement'
   .add_comment(self, paragraph: 'OoxElement', text: 'str', *, author: 'str' = 'oox', initials: 'str | None' = None, date=None) -> 'OoxElement'
   .add_cross_reference(self, paragraph: 'OoxElement', target, *, what: 'str' = 'text', hyperlink: 'bool' = True) -> 'OoxElement'
@@ -232,7 +232,7 @@ class oox.presentation.PresentationDocument(OoxDocument)
   .layouts  property (read-only)
   .links(self, slide: 'OoxElement') -> 'list[Hyperlink]'
   .masters  property (read-only)
-  .new(width: 'float' = 12192000, height: 'float' = 6858000, kind: 'str' = '.pptx', layouts: 'str' = 'standard') -> 'PresentationDocument'  classmethod
+  .new(width: 'float' = Emu(12192000), height: 'float' = Emu(6858000), kind: 'str' = '.pptx', layouts: 'str' = 'standard') -> 'PresentationDocument'  classmethod
   .notes(self, slide: 'OoxElement') -> 'str | None'
   .open(file: 'str | os.PathLike | IO[bytes]')  classmethod
   .part_of(self, element: 'OoxElement') -> 'Part'
@@ -332,7 +332,7 @@ class oox.tables.Table()
   .__init__(self, doc: 'WordprocessingDocument | None', tbl: 'OoxElement') -> 'None'
   .add_row(self, values: 'list[Any] | None' = None) -> 'OoxElement'
   .cell(self, row: 'int', col: 'int') -> 'OoxElement'
-  .format_cell(self, row: 'int', col: 'int', *, fill: 'str | None' = None, valign: 'str | None' = None, align: 'str | None' = None, bold: 'bool | None' = None) -> 'OoxElement'
+  .format_cell(self, row: 'int', col: 'int', *, fill: 'str | None' = None, valign: 'str | None' = None, align: 'str | None' = None, bold: 'bool | None' = None, borders: 'Any' = None, margins: 'dict[str, float] | None' = None) -> 'OoxElement'
   .header_rows  property (read-only)
   .merge(self, row1: 'int', col1: 'int', row2: 'int', col2: 'int') -> 'OoxElement'
   .n_cols  property (read-only)
@@ -484,11 +484,13 @@ class oox.formatting.Tab(tuple)
 
 class oox.resolve.Formatting()
   .__init__(self, doc: 'WordprocessingDocument') -> 'None'
+  .cell(self, tc: 'OoxElement') -> 'TableCellFormat'
+  .explain(self, el: 'OoxElement') -> 'dict[str, str]'
   .mark(self, p: 'OoxElement') -> 'RunFormat'
   .paragraph(self, p: 'OoxElement') -> 'ParagraphFormat'
   .run(self, r: 'OoxElement') -> 'RunFormat'
 
-class oox.resolve.RunFormat()
+class oox.resolve.RunFormat(Record)
   .bold: bool  field
   .italic: bool  field
   .underline: str | None  field
@@ -510,9 +512,27 @@ class oox.resolve.RunFormat()
   .language: str | None  field
   .border: Border | None  field
   .style: str | None  field
-  .__init__(self, bold: 'bool' = False, italic: 'bool' = False, underline: 'str | None' = None, strike: 'bool' = False, double_strike: 'bool' = False, size: 'float' = 10.0, font: 'str | None' = 'Times New Roman', font_east_asia: 'str | None' = None, font_complex: 'str | None' = None, color: 'str | None' = None, highlight: 'str | None' = None, superscript: 'bool' = False, subscript: 'bool' = False, caps: 'bool' = False, small_caps: 'bool' = False, shading: 'str | None' = None, letter_spacing: 'float' = 0.0, hidden: 'bool' = False, language: 'str | None' = None, border: 'Border | None' = None, style: 'str | None' = None) -> None
+  .font_high_ansi: str | None  field
+  .font_hint: str | None  field
+  .position: float  field
+  .scale: int  field
+  .kerning: float | None  field
+  .emphasis: str | None  field
+  .outline: bool  field
+  .shadow: bool  field
+  .emboss: bool  field
+  .imprint: bool  field
+  .right_to_left: bool  field
+  .complex_script: bool  field
+  .bold_complex: bool  field
+  .italic_complex: bool  field
+  .size_complex: float  field
+  .__init__(self, bold: 'bool' = False, italic: 'bool' = False, underline: 'str | None' = None, strike: 'bool' = False, double_strike: 'bool' = False, size: 'float' = 10.0, font: 'str | None' = 'Times New Roman', font_east_asia: 'str | None' = None, font_complex: 'str | None' = None, color: 'str | None' = None, highlight: 'str | None' = None, superscript: 'bool' = False, subscript: 'bool' = False, caps: 'bool' = False, small_caps: 'bool' = False, shading: 'str | None' = None, letter_spacing: 'float' = 0.0, hidden: 'bool' = False, language: 'str | None' = None, border: 'Border | None' = None, style: 'str | None' = None, font_high_ansi: 'str | None' = 'Times New Roman', font_hint: 'str | None' = None, position: 'float' = 0.0, scale: 'int' = 100, kerning: 'float | None' = None, emphasis: 'str | None' = None, outline: 'bool' = False, shadow: 'bool' = False, emboss: 'bool' = False, imprint: 'bool' = False, right_to_left: 'bool' = False, complex_script: 'bool' = False, bold_complex: 'bool' = False, italic_complex: 'bool' = False, size_complex: 'float' = 10.0) -> None
+  .as_dict(self) -> 'dict[str, Any]'
+  .font_for(self, char: 'str') -> 'str | None'
+  .highlight_color  property (read-only)
 
-class oox.resolve.ParagraphFormat()
+class oox.resolve.ParagraphFormat(Record)
   .style: str | None  field
   .align: str  field
   .space_before: float  field
@@ -531,7 +551,20 @@ class oox.resolve.ParagraphFormat()
   .borders: Borders  field
   .tabs: tuple[Tab, ...]  field
   .numbering: tuple[int, int] | None  field
-  .__init__(self, style: 'str | None' = None, align: 'str' = 'left', space_before: 'float' = 0.0, space_after: 'float' = 0.0, line_spacing: 'LineSpacing' = LineSpacing(rule='auto', value=1.0), indent_left: 'float' = 0.0, indent_right: 'float' = 0.0, first_line: 'float' = 0.0, keep_with_next: 'bool' = False, keep_together: 'bool' = False, page_break_before: 'bool' = False, widow_control: 'bool' = False, contextual_spacing: 'bool' = False, outline_level: 'int | None' = None, shading: 'str | None' = None, borders: 'Borders' = <factory>, tabs: 'tuple[Tab, ...]' = (), numbering: 'tuple[int, int] | None' = None) -> None
+  .right_to_left: bool  field
+  .suppress_hyphens: bool  field
+  .__init__(self, style: 'str | None' = None, align: 'str' = 'left', space_before: 'float' = 0.0, space_after: 'float' = 0.0, line_spacing: 'LineSpacing' = LineSpacing(rule='auto', value=1.0), indent_left: 'float' = 0.0, indent_right: 'float' = 0.0, first_line: 'float' = 0.0, keep_with_next: 'bool' = False, keep_together: 'bool' = False, page_break_before: 'bool' = False, widow_control: 'bool' = True, contextual_spacing: 'bool' = False, outline_level: 'int | None' = None, shading: 'str | None' = None, borders: 'Borders' = <factory>, tabs: 'tuple[Tab, ...]' = (), numbering: 'tuple[int, int] | None' = None, right_to_left: 'bool' = False, suppress_hyphens: 'bool' = False) -> None
+  .as_dict(self) -> 'dict[str, Any]'
+
+class oox.resolve.TableCellFormat(Record)
+  .fill: str | None  field
+  .valign: str  field
+  .borders: Borders  field
+  .margins: dict[str, float]  field
+  .conditions: tuple[str, ...]  field
+  .style: str | None  field
+  .__init__(self, fill: 'str | None' = None, valign: 'str' = 'top', borders: 'Borders' = <factory>, margins: 'dict[str, float]' = <factory>, conditions: 'tuple[str, ...]' = (), style: 'str | None' = None) -> None
+  .as_dict(self) -> 'dict[str, Any]'
 
 class oox.numbering.ListItem()
   .paragraph: OoxElement  field
@@ -547,6 +580,7 @@ class oox.numbering.ListItem()
   .story: str  field
   .__init__(self, paragraph: 'OoxElement', label: 'str', level: 'int', num_id: 'int', abstract_id: 'int', format: 'str', font: 'str | None', suffix: 'str', raw_label: 'str', picture: 'OoxElement | None' = None, story: 'str' = 'body') -> None
   .is_bullet  property (read-only)
+  .needs_symbol_font  property (read-only)
 
 class oox.document.ImageData(tuple)
   .content_type  attribute

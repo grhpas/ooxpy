@@ -41,12 +41,23 @@ _ALIGN_BACK = {"left": "left", "start": "left", "center": "center", "right": "ri
                "end": "right", "both": "justify", "distribute": "justify"}
 RUN_OPTIONS = ("bold", "italic", "underline", "strike", "double_strike", "size", "font",
                "color", "highlight", "superscript", "subscript", "caps", "small_caps",
-               "shading", "letter_spacing", "hidden", "language", "border")
+               "shading", "letter_spacing", "hidden", "language", "border",
+               "font_high_ansi", "font_east_asia", "font_complex", "font_hint", "position",
+               "scale", "kerning", "emphasis", "outline", "shadow", "emboss", "imprint",
+               "right_to_left", "complex_script", "bold_complex", "italic_complex",
+               "size_complex")
 PARAGRAPH_OPTIONS = ("align", "space_before", "space_after", "line_spacing", "indent_left",
                      "indent_right", "first_line", "keep_with_next", "keep_together",
                      "page_break_before", "widow_control", "contextual_spacing",
-                     "outline_level", "shading", "borders", "tabs")
+                     "outline_level", "shading", "borders", "tabs", "right_to_left",
+                     "suppress_hyphens")
 BORDER_SIDES = ("top", "left", "bottom", "right", "between", "bar")
+# Word's highlight colours (w:highlight) and their hex values
+HIGHLIGHT_COLORS = {"black": "000000", "blue": "0000FF", "cyan": "00FFFF", "green": "00FF00",
+                    "magenta": "FF00FF", "red": "FF0000", "yellow": "FFFF00",
+                    "white": "FFFFFF", "darkBlue": "000080", "darkCyan": "008080",
+                    "darkGreen": "008000", "darkMagenta": "800080", "darkRed": "800000",
+                    "darkYellow": "808000", "darkGray": "808080", "lightGray": "C0C0C0"}
 _LINE_RULES = {"auto": "auto", "exact": "exact", "at_least": "atLeast"}
 
 
@@ -88,8 +99,10 @@ class Border(NamedTuple):
 
 
 class Tab(NamedTuple):
-    """A tab stop: ``position`` in points from the left indent's origin,
-    ``align`` ("left", "center", "right", "decimal", "bar"), ``leader``
+    """A tab stop: ``position`` in points from the left page margin (not
+    from the paragraph's indent; in a table cell, from the cell's text area;
+    in a right-to-left paragraph, from the right margin), as ``w:tab``'s
+    ``pos`` is measured.  It can be negative.  ``align`` ("left", "center", "right", "decimal", "bar"), ``leader``
     ("none", "dot", "hyphen", "underscore", "heavy", "middleDot")."""
 
     position: float
@@ -148,7 +161,11 @@ def apply_run_format(rpr: OoxElement, **fmt: Any) -> OoxElement:
         raise TypeError(f"unknown run format {sorted(unknown)}; known: {', '.join(RUN_OPTIONS)}")
     toggles = {"bold": (w.B, w.BCs), "italic": (w.I, w.ICs), "strike": (w.Strike, None),
                "double_strike": (w.Dstrike, None), "caps": (w.Caps, None),
-               "small_caps": (w.SmallCaps, None), "hidden": (w.Vanish, None)}
+               "small_caps": (w.SmallCaps, None), "hidden": (w.Vanish, None),
+               "outline": (w.Outline, None), "shadow": (w.Shadow, None),
+               "emboss": (w.Emboss, None), "imprint": (w.Imprint, None),
+               "bold_complex": (w.BCs, None), "italic_complex": (w.ICs, None),
+               "right_to_left": (w.Rtl, None), "complex_script": (w.Cs, None)}
     for name, (factory, cs) in toggles.items():
         value = fmt.get(name)
         if value is None:
@@ -163,13 +180,28 @@ def apply_run_format(rpr: OoxElement, **fmt: Any) -> OoxElement:
         half = round(float(fmt["size"]) * 2)
         rpr.add(w.Sz(val=half), replace=True)
         rpr.add(w.SzCs(val=half), replace=True)
+    if fmt.get("size_complex") is not None:
+        rpr.add(w.SzCs(val=round(float(fmt["size_complex"]) * 2)), replace=True)
     if fmt.get("font") is not None:
         f = fmt["font"]
         rpr.add(w.RFonts(ascii=f, hAnsi=f, cs=f, eastAsia=f), replace=True)
+    slots = {k: fmt[k] for k in _FONT_ATTRS if fmt.get(k) is not None}
+    if slots:  # one script's font: set that attribute, keep the others
+        fonts = rpr.first("w:rFonts")
+        if fonts is None:
+            fonts = w.RFonts()
+            rpr.add(fonts, replace=True)
+        for key, value in slots.items():
+            attr, theme = _FONT_ATTRS[key]
+            if key == "font_hint" and value not in ("default", "eastAsia", "cs"):
+                raise ValueError('font_hint is "default", "eastAsia" or "cs"')
+            fonts.set(f"{{{W}}}{attr}", value)
+            if theme:
+                fonts.attrib.pop(f"{{{W}}}{theme}", None)
     if fmt.get("color") is not None:
         rpr.add(w.Color(val=_hex(fmt["color"])), replace=True)
     if fmt.get("highlight") is not None:
-        rpr.add(w.Highlight(val=fmt["highlight"]), replace=True)
+        rpr.add(w.Highlight(val=_highlight_name(fmt["highlight"])), replace=True)
     if fmt.get("superscript") is not None or fmt.get("subscript") is not None:
         pos = ("superscript" if fmt.get("superscript")
                else "subscript" if fmt.get("subscript") else "baseline")
@@ -182,7 +214,36 @@ def apply_run_format(rpr: OoxElement, **fmt: Any) -> OoxElement:
         rpr.add(w.Lang(val=fmt["language"]), replace=True)
     if fmt.get("border") is not None:
         rpr.add(_border_element(w.Bdr, fmt["border"]), replace=True)
+    if fmt.get("position") is not None:
+        rpr.add(w.Position(val=round(float(fmt["position"]) * 2)), replace=True)
+    if fmt.get("scale") is not None:
+        scale = int(fmt["scale"])
+        if not 1 <= scale <= 600:
+            raise ValueError("scale is a percentage, 1-600")
+        rpr.add(w.CharacterScale(val=scale), replace=True)
+    if fmt.get("kerning") is not None:
+        kern = fmt["kerning"]
+        rpr.add(w.Kern(val=round(float(kern) * 2) if kern else 0), replace=True)
+    if fmt.get("emphasis") is not None:
+        rpr.add(w.Em(val=fmt["emphasis"]), replace=True)
     return rpr
+
+
+_FONT_ATTRS = {"font_high_ansi": ("hAnsi", "hAnsiTheme"),
+               "font_east_asia": ("eastAsia", "eastAsiaTheme"),
+               "font_complex": ("cs", "cstheme"), "font_hint": ("hint", None)}
+
+
+def _highlight_name(value: str) -> str:
+    """Word's highlight name; a hex value from ``HIGHLIGHT_COLORS`` works too."""
+    if value in HIGHLIGHT_COLORS or value == "none":
+        return value
+    by_hex = {v: k for k, v in HIGHLIGHT_COLORS.items()}
+    name = by_hex.get(_hex(str(value)))
+    if name is None:
+        raise ValueError(f"highlight is one of Word's colours ({', '.join(HIGHLIGHT_COLORS)}) "
+                         "or its hex value")
+    return name
 
 
 def run(text: str, *, style: str | None = None, **fmt: Any) -> OoxElement:
@@ -190,7 +251,12 @@ def run(text: str, *, style: str | None = None, **fmt: Any) -> OoxElement:
     bold, italic, underline (True or a Word style such as "double"), strike,
     double_strike, size (pt), font, color (hex), highlight ("yellow" ...),
     superscript, subscript, caps, small_caps, shading (hex fill),
-    letter_spacing (pt), hidden, language ("en-US"), border (``Border``);
+    letter_spacing (pt), hidden, language ("en-US"), border (``Border``),
+    font_high_ansi / font_east_asia / font_complex (one script's font;
+    ``font`` sets all four), font_hint, position (pt, raised > 0), scale
+    (%), kerning (smallest size kerned, pt; 0 or False: off), emphasis
+    ("dot" ...), outline, shadow, emboss, imprint, right_to_left,
+    complex_script, bold_complex, italic_complex, size_complex (pt);
     ``style`` is a character style id."""
     from . import teletype
 
@@ -227,7 +293,9 @@ def apply_paragraph_format(ppr: OoxElement, **fmt: Any) -> OoxElement:
     for name, factory in (("keep_with_next", w.KeepNext), ("keep_together", w.KeepLines),
                           ("page_break_before", w.PageBreakBefore),
                           ("widow_control", w.WidowControl),
-                          ("contextual_spacing", w.ContextualSpacing)):
+                          ("contextual_spacing", w.ContextualSpacing),
+                          ("right_to_left", w.Bidi),
+                          ("suppress_hyphens", w.SuppressAutoHyphens)):
         if name in given:
             ppr.add(factory() if fmt[name] else factory(val=False), replace=True)
     if "outline_level" in given:
@@ -302,7 +370,8 @@ def format_paragraph(paragraph: OoxElement, **fmt: Any) -> OoxElement:
     first_line = hanging), keep_with_next, keep_together, page_break_before,
     widow_control, contextual_spacing, outline_level (0-8), shading (hex
     fill), borders (``Borders`` or {"bottom": Border(), ...}), tabs (``Tab``
-    stops; replaces the paragraph's own)."""
+    stops; replaces the paragraph's own), right_to_left, suppress_hyphens
+    (Word's "Don't hyphenate")."""
     ppr = paragraph.first("w:pPr")
     if ppr is None:
         ppr = w.PPr()

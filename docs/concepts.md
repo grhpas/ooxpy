@@ -132,6 +132,16 @@ print(doc.sections[0].margins["left"])           # 72.0
 print(Cm(2.54).pt, Inches(1).cm)                 # 72.0 2.54
 ```
 
+Lengths stay lengths when you compute with them: `Cm(2) + Cm(1)`, `Cm(2) * 1.5`,
+`-Cm(1)` and `sum([Cm(1), Inches(1)])` are all lengths, and `Cm(3) / Cm(1)` is the
+plain ratio 3.0. Adding a plain number to a length raises `TypeError`, because oox
+would read the number as points while `int` arithmetic would read it as EMU: write
+`Cm(2) + Pt(6)`.
+
+```python
+print(repr(Cm(2) + Cm(1)), round((Cm(2) + Pt(6)).cm, 4))    # Emu(1080000) 2.2117
+```
+
 Underneath, Office files use EMU (914,400 per inch) for drawings and twips (1/20
 point) for Word's page layout; oox converts. A plain number far too big to be meant as
 points (an EMU or twips value copied from elsewhere) raises an error suggesting

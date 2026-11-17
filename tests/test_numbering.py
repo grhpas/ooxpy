@@ -102,3 +102,39 @@ def test_errors():
     with pytest.raises(ValueError, match="0-8"):
         doc.new_list().add("x", level=9)
     assert WordprocessingDocument.new(minimal=True).list_labels() == []
+
+
+# -- 0.6.1: more number formats and symbol fonts ---------------------------------------------
+def test_more_number_formats():
+    from oox.numbering import format_number as f
+
+    assert [f(n, "russianLower") for n in (1, 10, 28, 29)] == ["а", "к", "я", "аа"]
+    assert f(3, "russianUpper") == "В"
+    assert [f(n, "hebrew1") for n in (1, 15, 16, 21, 115, 999)] == \
+        ["א", "טו", "טז", "כא", "קטו", "תתקצט"]
+    assert (f(1, "hebrew2"), f(23, "hebrew2")) == ("א", "אא")
+    assert (f(2, "arabicAlpha"), f(3, "arabicAbjad")) == ("ب", "ج")
+    assert (f(12, "hindiNumbers"), f(12, "thaiNumbers")) == ("١٢", "๑๒")
+    assert (f(1, "aiueoFullWidth"), f(47, "aiueoFullWidth"), f(2, "aiueo")) == ("ア", "ア", "ｲ")
+    assert (f(3, "irohaFullWidth"), f(3, "iroha")) == ("ハ", "ﾊ")
+    assert f(105, "ideographDigital") == "一〇五"
+    assert [f(n, "japaneseCounting") for n in (10, 11, 20, 101, 1234)] == \
+        ["十", "十一", "二十", "百一", "千二百三十四"]
+    assert [f(n, "chineseCounting") for n in (10, 100, 101, 110)] == \
+        ["十", "一百", "一百零一", "一百一十"]
+    assert (f(11, "ideographTraditional"), f(12, "ideographZodiac")) == ("甲", "亥")
+    assert (f(2, "ganada"), f(2, "chosung"), f(2, "ideographEnclosedCircle")) == ("나", "ㄴ", "㈡")
+    assert (f(7, "decimalFullWidth"), f(7, "thaiLetters"), f(7, "hindiVowels")) == ("７", "7", "7")
+
+
+def test_symbol_fonts_and_unconverted_characters():
+    from oox.numbering import needs_symbol_font, readable_text
+
+    assert readable_text("", "Symbol") == "•"
+    assert readable_text("a", "Symbol") == "αβ"  # Greek typed in the Symbol font
+    assert readable_text("", "Wingdings 2") == "✓☑●"
+    assert readable_text("", "Wingdings 3") == "►▲"
+    assert readable_text("", "Webdings") == "⏵"
+    assert readable_text("", "Arial") == ""  # not a symbol font
+    unknown = readable_text("", "Wingdings 2")
+    assert needs_symbol_font(unknown) and not needs_symbol_font("•")

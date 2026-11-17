@@ -2,17 +2,91 @@
 
 All notable changes to ooxpy. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
-[semantic versioning](https://semver.org/) from 1.0 (see docs/STABILITY.md).
+[semantic versioning](https://semver.org/) from 1.0 (see [API stability](https://github.com/grhpas/ooxpy/blob/main/docs/STABILITY.md)).
 
-## [0.6.0] — unreleased
+## [0.6.1] — 2026-11-17
+
+Fixes and additions from the first review of 0.6.0 in use (Petals Office, a word
+processor that reads .docx through oox). Some of them add to the API or correct a
+default; by the maintainer's decision they ship as a patch release, because 0.6.0
+had a single user (see [API stability](https://github.com/grhpas/ooxpy/blob/main/docs/STABILITY.md)). Given the same settings, the files oox writes
+are unchanged byte for byte.
+
+### Fixed
+
+- **List ids are ints everywhere.** `ListItem.num_id` and
+  `ParagraphFormat.numbering` gave ints, but `numbering.Definitions.levels()`
+  looked ids up as strings, so passing it what the other two give returned None
+  (no error, no list). `levels()` now takes an int (or the XML's string form), and
+  it and `numbering_of()` return int ids.
+- **Lengths stay lengths in arithmetic.** `Cm(2) + Cm(1)`, `Cm(2) * 2`, `-Cm(1)`,
+  `abs()` and `sum([...])` gave a plain `int`, which oox then read as points:
+  12,700 times too big. They now give a `Length`; `Length / Length` is a plain
+  ratio. **Changed:** a `Length` plus a plain number other than 0 raises
+  `TypeError` (the number's unit is ambiguous: write `Cm(2) + Pt(6)`), and
+  `repr(Cm(1))` is `Emu(360000)`.
+- **Widow control is on by default**, as Word shows it: `ParagraphFormat.widow_control`
+  is True unless something in the hierarchy turns it off (the standard says off
+  when absent; Word writes `w:val="0"` to turn it off). **Changed** default.
+- `Section.shown()` walked the whole body twice on every call (to find the
+  section, then to count sections sharing the header, which only matters when
+  creating one). It now walks back from the section itself, so reading every
+  header and footer of a long document is linear.
+- `Part.related_part()` on a part outside a package said the target was missing,
+  which read as a broken file; it now says the part is not in a package.
+- `Record.as_dict()` mangled `Border`, `Tab` and `LineSpacing` values inside a
+  record; they stay as they are, ready to be written back.
+- `Tab.position` is documented as measured from the left page margin (as
+  `w:tab`'s `pos` is), not from the paragraph's indent.
+
+### Added
+
+- **The font for Greek, Cyrillic and accented text.** `RunFormat` gains
+  `font_high_ansi` (`w:hAnsi`, the font Word uses outside ASCII for Latin, Greek,
+  Cyrillic and symbols) and `font_hint`, resolved through the same layers and theme
+  fonts as `font`; `rf.font_for(char)` gives the font Word uses for a character
+  (and `oox.resolve.script_slot` which of the four). The writers take
+  `font_high_ansi`, `font_east_asia`, `font_complex` and `font_hint` to set one
+  script's font.
+- **Table cells in the resolver.** `formatting().cell(tc)` returns a
+  `TableCellFormat`: shading, vertical alignment, cell margins and the border Word
+  draws on each edge, through the table style and its conditional formats, the
+  row's exceptions, the table's and the cell's own properties, with border
+  conflicts between neighbouring cells resolved as MS-OI29500 describes Word doing
+  it (`oox.resolve.resolve_conflict`). `Table.format_cell` takes `borders` and
+  `margins` under the same names.
+- **Where each value comes from.** `formatting().explain(el)` maps each field of a
+  paragraph, run or cell to its layer ("paragraph style 'Heading 1'", "table style
+  'Grid', first row", "list 3, level 0", "direct formatting" ...).
+- More properties, read and written: raised/lowered text (`position`), character
+  scale, kerning, emphasis marks, outline, shadow, emboss, imprint, right-to-left
+  and complex-script runs with their own bold, italic and size; right-to-left
+  paragraphs and "Don't hyphenate" (`suppress_hyphens`).
+- `RunFormat.highlight_color` gives the hex of Word's highlight name, and
+  `oox.formatting.HIGHLIGHT_COLORS` the whole table; the writers take a highlight
+  as a name or its hex.
+- `RunFormat` and `ParagraphFormat` are records (`as_dict()`).
+- More number formats: Russian, Hebrew (letters and numerals) and Arabic (alphabet
+  and abjad) letters, Arabic-Indic and Thai digits, the Japanese kana orders (aiueo,
+  iroha, half and full width), CJK digits and Japanese and Chinese counting, the
+  heavenly stems and earthly branches, Korean ganada and chosung. The formats that
+  still read as decimal are listed in the reading guide.
+- Symbol fonts: `readable_text()` knows Symbol's Greek letters and signs, and the
+  bullet shapes of Wingdings 2, Wingdings 3 and Webdings besides Wingdings;
+  `numbering.needs_symbol_font(text)` and `ListItem.needs_symbol_font` say when a
+  character couldn't be converted and must be drawn in its symbol font.
+- The reading guide covers fonts per script, table cells, `explain()`, where Word
+  and the standard disagree, and what still isn't modelled.
+
+## [0.6.0] — 2026-11-17
 
 This release follows a review of reading existing files, and settles the API
-questions left open for 1.0 (`docs/API_DECISIONS.md`). Nobody depended on 0.5 yet,
+questions left open for 1.0 ([API decisions](https://github.com/grhpas/ooxpy/blob/main/docs/API_DECISIONS.md)). Nobody depended on 0.5 yet,
 so the changes replace the old shapes rather than adding a second way to do things;
 every change below names the replacement. Given the same settings, the files oox
 writes are unchanged byte for byte.
 
-### The API's conventions (see API stability)
+### The API's conventions (see [API stability](https://github.com/grhpas/ooxpy/blob/main/docs/STABILITY.md))
 
 - **Changed: readers return records.** About thirty readers that returned dicts or
   tuples now return frozen records from `oox.records`, with named fields and
@@ -37,6 +111,10 @@ writes are unchanged byte for byte.
   PowerPoint positions and slide size, and `SlideTable` widths. Readers report
   points. A plain number far too large to be points (a raw EMU or twips value)
   raises `ValueError` suggesting `Emu()`. Excel column widths stay in characters.
+  `ensure_style(text_width=...)` is in points too (it was twips: an old value is
+  now too large and raises). In 0.5.2 plain numbers in page setup were twips (see
+  below). Note: in 0.6.0, arithmetic on lengths (`Cm(2) + Cm(1)`) gives a plain
+  `int`, which reads as points; fixed in 0.6.1.
 - **Changed: PowerPoint geometry is keywords.** `add_text_box`, `add_shape`,
   `add_table`, `add_chart` and `add_picture` take `x`, `y`, `width`, `height` as
   optional keywords (`cx`/`cy` are gone; `add_table`'s `col_widths` is `widths`).
@@ -69,7 +147,7 @@ writes are unchanged byte for byte.
 
 ### Reading never changes a document
 
-- A rule now, enforced by a test over every public member (see API stability).
+- A rule now, enforced by a test over every public member (see [API stability](https://github.com/grhpas/ooxpy/blob/main/docs/STABILITY.md)).
 - `doc.styles`, `doc.settings` and `doc.numbering` return None when the part is
   missing; `ensure_styles()`, `ensure_settings()` and `ensure_numbering()` create it.
 - A document without a final `w:sectPr` has one virtual section reporting Word's
@@ -140,7 +218,7 @@ writes are unchanged byte for byte.
 
 ### Also
 
-- A guide, "Reading a document as Word shows it", covers the walker, the
+- A guide, ["Reading a document as Word shows it"](https://github.com/grhpas/ooxpy/blob/main/docs/guide/reading.md), covers the walker, the
   formatting layers, lists, sections and pictures, and what isn't modelled.
 - A PyInstaller hook, registered through the `pyinstaller40` entry point, bundles
   the modules oox imports by name; `pyinstaller app.py` needs no options.
@@ -150,10 +228,34 @@ writes are unchanged byte for byte.
 - The README's links are absolute (PyPI shows the README without the repository
   around it), and the package metadata links the repository, issues and changelog.
 
+### Errors you may meet when upgrading from 0.5
+
+- `AttributeError: 'function' object has no attribute 'get'`: `part.rels.items.get(rid)`;
+  `rels` is a mapping now: `part.rels.get(rid)`.
+- `cannot unpack non-iterable ListItem object`: `for p, label in doc.list_labels()`;
+  use `for item in doc.list_labels()` with `item.paragraph` and `item.label`.
+- `ValueError: ... is read as points ...`: a twips or EMU number where points are
+  meant; divide twips by 20, or wrap EMU in `Emu()`.
+- `TypeError: ... unexpected keyword argument 'url'`: `add_hyperlink(url=)` is
+  `add_hyperlink(target=)`.
+- `AttributeError` on a reader's result used as a dict or tuple: readers return
+  records; use the field names (`link.target`), or `record.as_dict()`.
+
+### Known issues (fixed in 0.6.1)
+
+- `numbering.Definitions.levels()` takes the id as a string, while
+  `ListItem.num_id` is an int: pass `str(item.num_id)`.
+- Arithmetic on lengths gives a plain `int` (read as points): wrap sums in `Emu()`.
+- `RunFormat.font` is the ASCII font only; Greek, Cyrillic and accented text may use
+  another (`w:hAnsi`), which 0.6.0 doesn't report.
+- `widow_control` reads False where Word shows it on.
+- `Section.shown()` walks the whole body twice per call.
+
 ## [0.5.2] — 2026-11-17 (first public release)
 
 The first release on PyPI (0.5.0 and 0.5.1 were never published: the version
-numbers were used up while setting up trusted publishing). It covers the roadmap's phases 0–4 and most of phase 3.
+numbers were used up while setting up trusted publishing). It covers the
+roadmap's phases 0–2 and 4, and most of phase 3.
 The Word, Excel and PowerPoint features below have cases in the Office check
 corpus, all confirmed on Office 2007; Office 2016 opened every case without a
 repair prompt (`tools/officecheck/reports/`). Strict-conformance files have been
@@ -217,3 +319,7 @@ checked with LibreOffice only.
   (it used to switch to the new one).
 - `Section.set_margins` accepts EMU from `oox.units` (`left=Cm(2)`), as Word tables do;
   plain numbers are still twips.
+
+[0.6.1]: https://github.com/grhpas/ooxpy/compare/v0.6.0...v0.6.1
+[0.6.0]: https://github.com/grhpas/ooxpy/compare/v0.5.2...v0.6.0
+[0.5.2]: https://github.com/grhpas/ooxpy/releases/tag/v0.5.2

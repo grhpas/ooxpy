@@ -39,7 +39,7 @@ _Z_BASE = 251659264
 
 
 def _pt(emu: int) -> str:
-    v = emu / 12700
+    v = int(emu) / 12700
     return f"{v:g}pt"
 
 

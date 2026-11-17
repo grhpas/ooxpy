@@ -509,6 +509,29 @@ An image's bytes and where they live; see `OoxDocument.image_of`.
 Resolves effective formatting for one document; see the module docs.
 Make one with `doc.formatting()`.
 
+### `cell`
+
+```python
+cell(tc: OoxElement) -> TableCellFormat
+```
+
+The formatting Word gives the table cell `tc` (a `w:tc`):
+shading, vertical alignment, margins, and the border it draws on each
+edge after border conflicts with its neighbours.
+
+### `explain`
+
+```python
+explain(el: OoxElement) -> dict[str, str]
+```
+
+Where each value of a paragraph (`w:p`), run (`w:r`) or table
+cell (`w:tc`) comes from: {field: "paragraph style 'Heading 1'",
+"table style 'Grid', first row", "list 3, level 0", "character style
+'Strong'", "document defaults", "direct formatting" ...}.  Fields not
+listed have Word's default.  Borders and margins are listed by side
+("borders.top"); "tabs" lists every layer that set tab stops.
+
 ### `mark`
 
 ```python
@@ -536,6 +559,8 @@ The character formatting Word applies to the run `r`.
 
 ## `ParagraphFormat`
 
+*Based on* `Record`.
+
 ```python
 ParagraphFormat(
     style: str | None = None,
@@ -549,24 +574,30 @@ ParagraphFormat(
     keep_with_next: bool = False,
     keep_together: bool = False,
     page_break_before: bool = False,
-    widow_control: bool = False,
+    widow_control: bool = True,
     contextual_spacing: bool = False,
     outline_level: int | None = None,
     shading: str | None = None,
     borders: Borders = <factory>,
     tabs: tuple[Tab, ...] = (),
     numbering: tuple[int, int] | None = None,
+    right_to_left: bool = False,
+    suppress_hyphens: bool = False,
 ) -> None
 ```
 
 Effective paragraph formatting, in points.  `first_line` is negative
-for a hanging indent; `outline_level` is 0-8 or None for body text;
-`style` is the paragraph style's name; `numbering` is
-`(num_id, level)` for a list paragraph.
+for a hanging indent; `outline_level` is 0-8 (Word's dialogs say 1-9)
+or None for body text; `style` is the paragraph style's name;
+`numbering` is `(num_id, level)` for a list paragraph (level 0-8),
+with the ints `ListItem` uses.  `widow_control` is on unless
+something turns it off, as in Word.
 
-Fields: `style`, `align`, `space_before`, `space_after`, `line_spacing`, `indent_left`, `indent_right`, `first_line`, `keep_with_next`, `keep_together`, `page_break_before`, `widow_control`, `contextual_spacing`, `outline_level`, `shading`, `borders`, `tabs`, `numbering`
+Fields: `style`, `align`, `space_before`, `space_after`, `line_spacing`, `indent_left`, `indent_right`, `first_line`, `keep_with_next`, `keep_together`, `page_break_before`, `widow_control`, `contextual_spacing`, `outline_level`, `shading`, `borders`, `tabs`, `numbering`, `right_to_left`, `suppress_hyphens`
 
 ## `RunFormat`
+
+*Based on* `Record`.
 
 ```python
 RunFormat(
@@ -591,15 +622,71 @@ RunFormat(
     language: str | None = None,
     border: Border | None = None,
     style: str | None = None,
+    font_high_ansi: str | None = 'Times New Roman',
+    font_hint: str | None = None,
+    position: float = 0.0,
+    scale: int = 100,
+    kerning: float | None = None,
+    emphasis: str | None = None,
+    outline: bool = False,
+    shadow: bool = False,
+    emboss: bool = False,
+    imprint: bool = False,
+    right_to_left: bool = False,
+    complex_script: bool = False,
+    bold_complex: bool = False,
+    italic_complex: bool = False,
+    size_complex: float = 10.0,
 ) -> None
 ```
 
-Effective run (character) formatting.  `size`, `letter_spacing` in
-points; colors as hex ("C00000") or None for automatic; `underline` is
-None or Word's underline style ("single", "double" ...); `style` is the
-character style's name.
+Effective run (character) formatting.
 
-Fields: `bold`, `italic`, `underline`, `strike`, `double_strike`, `size`, `font`, `font_east_asia`, `font_complex`, `color`, `highlight`, `superscript`, `subscript`, `caps`, `small_caps`, `shading`, `letter_spacing`, `hidden`, `language`, `border`, `style`
+Sizes and `letter_spacing`, `position` (raised > 0, lowered < 0) and
+`kerning` (the smallest size kerned; None: off) in points; `scale`
+in percent; colors as hex ("C00000") or None for automatic;
+`highlight` is Word's colour name ("yellow"; `highlight_color` gives
+its hex); `underline` is None or Word's underline style ("single",
+"double" ...); `emphasis` is None or "dot", "comma", "circle",
+"underDot".  `style` is the character style's name.
+
+Fonts: Word picks one of four per character.  `font` is for ASCII,
+`font_high_ansi` for the rest of Latin, Greek, Cyrillic and symbols,
+`font_east_asia` and `font_complex` (right-to-left and South-East
+Asian scripts) for theirs; `font_hint` ("eastAsia", "cs" or None)
+settles characters that two of them share.  `font_for(char)` does the
+choosing.  `bold_complex`, `italic_complex` and `size_complex`
+apply to complex-script text, `right_to_left` and `complex_script`
+make a whole run use them.
+
+Fields: `bold`, `italic`, `underline`, `strike`, `double_strike`, `size`, `font`, `font_east_asia`, `font_complex`, `color`, `highlight`, `superscript`, `subscript`, `caps`, `small_caps`, `shading`, `letter_spacing`, `hidden`, `language`, `border`, `style`, `font_high_ansi`, `font_hint`, `position`, `scale`, `kerning`, `emphasis`, `outline`, `shadow`, `emboss`, `imprint`, `right_to_left`, `complex_script`, `bold_complex`, `italic_complex`, `size_complex`
+
+## `TableCellFormat`
+
+*Based on* `Record`.
+
+```python
+TableCellFormat(
+    fill: str | None = None,
+    valign: str = 'top',
+    borders: Borders = <factory>,
+    margins: dict[str, float] = <factory>,
+    conditions: tuple[str, ...] = (),
+    style: str | None = None,
+) -> None
+```
+
+Effective formatting of a table cell (`w:tc`), after table styles,
+conditional formats, row exceptions and border conflicts.
+
+`fill` is the shading (hex) or None; `valign` "top", "center" or
+"bottom" (`Table.format_cell`'s names); `borders` the border Word
+draws on each edge (`top`, `left`, `bottom`, `right`; None for
+no line); `margins` the cell margins in points by side.
+`conditions` names the table style's conditional formats that apply
+("firstRow", "band1Horz" ...); `style` is the table style's name.
+
+Fields: `fill`, `valign`, `borders`, `margins`, `conditions`, `style`
 
 ## `LineSpacing`
 
@@ -664,6 +751,8 @@ Fields: `top`, `left`, `bottom`, `right`, `between`, `bar`
 
 ## `Tab`
 
-A tab stop: `position` in points from the left indent's origin,
-`align` ("left", "center", "right", "decimal", "bar"), `leader`
+A tab stop: `position` in points from the left page margin (not
+from the paragraph's indent; in a table cell, from the cell's text area;
+in a right-to-left paragraph, from the right margin), as `w:tab`'s
+`pos` is measured.  It can be negative.  `align` ("left", "center", "right", "decimal", "bar"), `leader`
 ("none", "dot", "hyphen", "underscore", "heavy", "middleDot").

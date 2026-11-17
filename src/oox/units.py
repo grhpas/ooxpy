@@ -27,28 +27,113 @@ EMU_PER_PT = 12700
 EMU_PER_TWIP = 635
 
 
+def _plain(other: object) -> bool:
+    return isinstance(other, (int, float)) and not isinstance(other, (bool, Length))
+
+
+def _ambiguous(op: str, other: object) -> TypeError:
+    return TypeError(
+        f"Length {op} {other!r}: a plain number would be points to oox but EMU to int "
+        f"arithmetic; write Pt({other!r}), Cm(...) or Emu({other!r})")
+
+
 class Length(int):
-    """A length in EMU.  Behaves as an ``int`` everywhere; arithmetic gives
-    plain ints."""
+    """A length in EMU that remembers it is a length.
+
+    Arithmetic keeps it a ``Length``: ``Cm(2) + Cm(1)``, ``-Cm(1)``,
+    ``abs()``, ``Cm(2) * 1.5`` and ``Cm(3) / 2`` are all lengths, and
+    ``sum(lengths)`` works.  ``Length / Length`` is a plain ratio.  Adding a
+    plain number other than 0 raises ``TypeError``, because oox reads a plain
+    number as points: write ``Cm(2) + Pt(6)``.  Anywhere else it behaves as an
+    ``int`` count of EMU."""
 
     __slots__ = ()
+
+    def __repr__(self) -> str:
+        return f"Emu({int(self)})"
+
+    def __str__(self) -> str:  # the number, as XML attributes need it
+        return int.__repr__(self)
+
+    def __format__(self, spec: str) -> str:
+        return int(self).__format__(spec)
+
+    def __add__(self, other: object) -> Length:  # type: ignore[override]
+        if isinstance(other, Length) or (other == 0 and _plain(other)):
+            return Length(int(self) + int(other))  # type: ignore[call-overload]
+        if _plain(other):
+            raise _ambiguous("+", other)
+        return NotImplemented
+
+    __radd__ = __add__  # type: ignore[assignment]
+
+    def __sub__(self, other: object) -> Length:  # type: ignore[override]
+        if isinstance(other, Length) or (other == 0 and _plain(other)):
+            return Length(int(self) - int(other))  # type: ignore[call-overload]
+        if _plain(other):
+            raise _ambiguous("-", other)
+        return NotImplemented
+
+    def __rsub__(self, other: object) -> Length:  # type: ignore[override]
+        if other == 0 and _plain(other):
+            return Length(-int(self))
+        if _plain(other):
+            raise _ambiguous("-", other)
+        return NotImplemented
+
+    def __mul__(self, other: object) -> Length:  # type: ignore[override]
+        if _plain(other):
+            return Length(round(int(self) * other))  # type: ignore[operator]
+        if isinstance(other, Length):
+            raise TypeError("Length * Length is an area, not a length")
+        return NotImplemented
+
+    __rmul__ = __mul__  # type: ignore[assignment]
+
+    def __truediv__(self, other: object) -> Length | float:  # type: ignore[override]
+        if isinstance(other, Length):
+            return int(self) / int(other)
+        if _plain(other):
+            return Length(round(int(self) / other))  # type: ignore[operator]
+        return NotImplemented
+
+    def __floordiv__(self, other: object) -> Length | int:  # type: ignore[override]
+        if isinstance(other, Length):
+            return int(self) // int(other)
+        if _plain(other):
+            return Length(int(self) // other)  # type: ignore[operator]
+        return NotImplemented
+
+    def __mod__(self, other: object) -> Length:  # type: ignore[override]
+        if isinstance(other, Length):
+            return Length(int(self) % int(other))
+        return NotImplemented
+
+    def __neg__(self) -> Length:
+        return Length(-int(self))
+
+    def __pos__(self) -> Length:
+        return self
+
+    def __abs__(self) -> Length:
+        return Length(abs(int(self)))
 
     @property
     def pt(self) -> float:
         """In points, as the readers report lengths."""
-        return round(self / EMU_PER_PT, 6)
+        return round(int(self) / EMU_PER_PT, 6)
 
     @property
     def cm(self) -> float:
-        return self / EMU_PER_CM
+        return int(self) / EMU_PER_CM
 
     @property
     def inches(self) -> float:
-        return self / EMU_PER_INCH
+        return int(self) / EMU_PER_INCH
 
     @property
     def twips(self) -> int:
-        return round(self / EMU_PER_TWIP)
+        return round(int(self) / EMU_PER_TWIP)
 
 
 def Emu(value: float) -> Length:
@@ -77,7 +162,7 @@ def Px(value: float, dpi: float = 96) -> Length:
 
 def to_twips(emu: int) -> int:
     """EMU -> twips (for w:pgSz, w:pgMar, w:tblW ...)."""
-    return round(emu / EMU_PER_TWIP)
+    return round(int(emu) / EMU_PER_TWIP)
 
 
 def _check(value: object, name: str) -> float:
@@ -108,7 +193,7 @@ def emu(value: float, name: str = "length", limit: float | None = None) -> int:
 def twips(value: float, name: str = "length", limit: float | None = None) -> int:
     """Points (or a ``Length``) -> twips."""
     if isinstance(value, Length):
-        return round(value / EMU_PER_TWIP)
+        return round(int(value) / EMU_PER_TWIP)
     points = _check(value, name)
     _limit(points, value, name, limit)
     return round(points * 20)
@@ -116,12 +201,12 @@ def twips(value: float, name: str = "length", limit: float | None = None) -> int
 
 def points(emu_value: float) -> float:
     """EMU -> points, as the readers report them (exact enough to write back)."""
-    return round(emu_value / EMU_PER_PT, 6)
+    return round(float(emu_value) / EMU_PER_PT, 6)
 
 
 def twips_to_points(value: float) -> float:
     """Twips -> points."""
-    return round(value / 20, 6)
+    return round(float(value) / 20, 6)
 
 
 # Plausible maxima in points, to catch raw EMU or twips in old code.

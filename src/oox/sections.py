@@ -203,10 +203,12 @@ class Section:
             if rel is not None:
                 part = self.doc.package.parts.get(self.doc.main_part.resolve(rel.target))
                 if part is not None:
+                    if not create:
+                        return part.element
                     shared = sum(1 for s in self.doc.sections for r in
                                  s.sect_pr.iterchildren(f"{{{W}}}{what}Reference")
                                  if r.get(f"{{{R}}}id") == ref.get(f"{{{R}}}id"))
-                    if not (create and shared > 1):
+                    if shared <= 1:
                         return part.element
                     # the part is shared with another section: give this one its own
         if not create:
@@ -256,6 +258,35 @@ class Section:
         shows the previous section's."""
         return self._ref(what, kind) is None
 
+    def _this_and_earlier(self):
+        """This section, then the earlier ones nearest first, found by walking
+        back from this section's end rather than through the whole body."""
+        from .walk import P, blocks_before, is_block
+
+        doc, sp = self.doc, self.sect_pr
+        body = doc.body
+        parent = sp.getparent()
+        final = body.first("w:sectPr")
+        if parent is None and final is None and sp is doc.__dict__.get("_default_sect_pr"):
+            start = None  # the default last section: start after the last block
+        elif parent is body and sp is final:
+            start = sp
+        elif (parent is not None and parent.tag == f"{{{W}}}pPr" and parent.first("w:sectPr") is sp
+              and (p := parent.getparent()) is not None and p.tag == P and is_block(body, p)):
+            start = p
+        else:
+            raise OoxError("this section is no longer part of the document")
+        yield self
+        if start is None:
+            earlier = (b for child in reversed(body) for b in _blocks_from(child))
+        else:
+            earlier = blocks_before(body, start, P)
+        for block in earlier:
+            ppr = block.first("w:pPr")
+            found = ppr.first("w:sectPr") if ppr is not None else None
+            if found is not None:
+                yield Section(doc, found)
+
     def shown(self, what: str = "header", kind: str = "default") -> OoxElement | None:
         """The header/footer this section actually shows, following "Link to
         Previous" back through earlier sections; None if there is none.
@@ -263,11 +294,7 @@ class Section:
         None means Word shows nothing there.  In particular, with a different
         first page (``kind="first"``) and no first-page header in this or an
         earlier section, the first page has no header: not the default one."""
-        secs = self.doc.sections
-        idx = next((i for i, s in enumerate(secs) if s.sect_pr is self.sect_pr), None)
-        if idx is None:
-            raise OoxError("this section is no longer part of the document")
-        for s in reversed(secs[:idx + 1]):
+        for s in self._this_and_earlier():
             if s._ref(what, kind) is not None:
                 return s._hdr_ftr(what, kind, create=False)
         return None
@@ -298,6 +325,12 @@ class Section:
         root = self.ensure_footer(kind)
         assert root is not None
         return self._set_text(root, text, align, "Footer")
+
+
+def _blocks_from(el: OoxElement):
+    from .walk import P, _reversed_blocks
+
+    return _reversed_blocks(el, frozenset({P}))
 
 
 def sections(doc: WordprocessingDocument) -> list[Section]:

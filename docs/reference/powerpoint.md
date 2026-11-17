@@ -14,8 +14,8 @@ Base class.  Subclasses set `MAIN_CONTENT_TYPES` and implement `new`.
 
 ```python
 new(
-    width: float = 12192000,
-    height: float = 6858000,
+    width: float = Emu(12192000),
+    height: float = Emu(6858000),
     kind: str = '.pptx',
     layouts: str = 'standard',
 ) -> PresentationDocument
@@ -310,7 +310,7 @@ banded: bool = True
 first_column: bool = False
 style: str | None = 'Medium Style 2 - Accent 1'
 widths: list[float] | None = None
-row_height: float = 365760
+row_height: float = Emu(365760)
 size: float | None = None
 merges=()
 name: str | None = None

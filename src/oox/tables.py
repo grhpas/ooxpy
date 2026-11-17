@@ -69,6 +69,42 @@ def _tcpr(tc: OoxElement) -> OoxElement:
     return tcpr
 
 
+_CELL_SIDES = ("top", "left", "bottom", "right")
+
+
+def _cell_borders(borders: Any) -> OoxElement:
+    from .formatting import Borders, _border_element
+
+    if isinstance(borders, Borders):
+        sides = {s: getattr(borders, s) for s in _CELL_SIDES}
+        if borders.between is not None or borders.bar is not None:
+            raise ValueError("a cell's borders are top, left, bottom and right")
+    else:
+        sides = dict(borders)
+        bad = set(sides) - set(_CELL_SIDES)
+        if bad:
+            raise ValueError(f"a cell's borders are {', '.join(_CELL_SIDES)}, not {sorted(bad)}")
+    out = w.TcBorders()
+    for side in _CELL_SIDES:
+        if side not in sides:
+            continue
+        factory = getattr(w, side.capitalize())
+        border = sides[side]
+        out.add(factory(val="nil") if border is None else _border_element(factory, border))
+    return out
+
+
+def _cell_margins(margins: dict[str, float]) -> OoxElement:
+    bad = set(margins) - set(_CELL_SIDES)
+    if bad:
+        raise ValueError(f"a cell's margins are {', '.join(_CELL_SIDES)}, not {sorted(bad)}")
+    out = w.TcMar()
+    for side in _CELL_SIDES:
+        if margins.get(side) is not None:
+            out.add(getattr(w, side.capitalize())(w=_twips(margins[side], side), type="dxa"))
+    return out
+
+
 def _set_row_prop(tr: OoxElement, prop: OoxElement | None, tag: str) -> None:
     """Set (or with prop=None, remove) one row property.  w:trPr is an
     unbounded choice in the schema, so replace= can't be used: it would add a
@@ -216,11 +252,19 @@ class Table:
 
     def format_cell(self, row: int, col: int, *, fill: str | None = None,
                     valign: str | None = None, align: str | None = None,
-                    bold: bool | None = None) -> OoxElement:
+                    bold: bool | None = None, borders: Any = None,
+                    margins: dict[str, float] | None = None) -> OoxElement:
         """Shading (hex colour), vertical alignment (top/center/bottom),
-        paragraph alignment (left/center/right/justify), bold."""
+        paragraph alignment (left/center/right/justify), bold; ``borders``
+        (``Borders`` or {"top": Border(...), ...}; None on a side removes that
+        line, as "nil") and ``margins`` ({"left": 4, ...} in points), the
+        names ``doc.formatting().cell(tc)`` reports."""
         tc = self.cell(row, col)
         tcpr = _tcpr(tc)
+        if borders is not None:
+            tcpr.add(_cell_borders(borders), replace=True)
+        if margins is not None:
+            tcpr.add(_cell_margins(margins), replace=True)
         if fill is not None:
             tcpr.add(w.Shd(val="clear", color="auto", fill=fill), replace=True)
         if valign is not None:

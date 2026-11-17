@@ -127,7 +127,8 @@ PAGES = [
          "SlideTableInfo", "SlideSection")]
      + [("class", "oox.numbering.ListItem", []), ("class", "oox.document.ImageData", []),
         ("class", "oox.resolve.Formatting", None), ("class", "oox.resolve.ParagraphFormat", []),
-        ("class", "oox.resolve.RunFormat", []), ("class", "oox.formatting.LineSpacing", None),
+        ("class", "oox.resolve.RunFormat", []), ("class", "oox.resolve.TableCellFormat", []),
+        ("class", "oox.formatting.LineSpacing", None),
         ("class", "oox.formatting.Border", []), ("class", "oox.formatting.Borders", []),
         ("class", "oox.formatting.Tab", [])]),
     ("utilities", "Units and errors", "Length units and the exception hierarchy.",
