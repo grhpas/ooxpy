@@ -1,4 +1,5 @@
 site_name: ooxpy
+site_url: !ENV [READTHEDOCS_CANONICAL_URL, https://ooxpy.readthedocs.io/en/stable/]
 site_description: Office Open XML (docx, xlsx, pptx) for Python, the odfpy way
 repo_url: https://github.com/grhpas/ooxpy
 edit_uri: edit/main/docs/
