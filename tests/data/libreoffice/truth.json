@@ -1,0 +1,67 @@
+{
+ "libreoffice": "LibreOffice 24.2.7.2 420(Build:2)",
+ "documents": {
+  "lists.docx": {
+   "labels": [
+    "1",
+    "1.1",
+    "1.2",
+    "1.",
+    "2.",
+    "a)",
+    "b)",
+    "3.",
+    "•",
+    "•",
+    "III.",
+    "IV.",
+    "2",
+    "1."
+   ],
+   "libreoffice_text": [
+    "1 Introduction",
+    "1.1 Scope",
+    "1.2 Terms",
+    "    1. Collect",
+    "    2. Check",
+    "        a) North",
+    "        b) South",
+    "    3. Report",
+    "    • Apples",
+    "    • Pears",
+    "    III. Third",
+    "    IV. Fourth",
+    "2 Results",
+    "    1. Again"
+   ]
+  },
+  "sections.docx": {
+   "sections": 3,
+   "orientations": [
+    "portrait",
+    "landscape",
+    "portrait"
+   ],
+   "libreoffice_text": [
+    "Portrait page.",
+    "Landscape page.",
+    "Portrait again."
+   ]
+  },
+  "frames.docx": {
+   "pictures": 2,
+   "text_boxes": 1,
+   "tables": 1,
+   "once": [
+    "Inside the box."
+   ],
+   "libreoffice_text": [
+    "Picture: ",
+    "After the box.",
+    "a",
+    "b",
+    "Second picture: "
+   ]
+  }
+ }
+}
