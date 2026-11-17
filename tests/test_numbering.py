@@ -12,7 +12,7 @@ docx = pytest.importorskip("docx")
 
 
 def labels(doc):
-    return [(lab, teletype.extractText(p)) for p, lab in doc.list_labels()]
+    return [(item.label, teletype.extractText(item.paragraph)) for item in doc.list_labels()]
 
 
 def test_kinds_levels_restart_and_start():
@@ -33,7 +33,7 @@ def test_kinds_levels_restart_and_start():
     leg.add("y", 1)
     leg.add("z", 2)
     assert [lab for lab, _ in labels(doc)] == [
-        "", "o", "1.", "a.", "b.", "i.", "2.", "a.", "1.", "3.", "3.1.", "3.1.1."]
+        "\u2022", "o", "1.", "a.", "b.", "i.", "2.", "a.", "1.", "3.", "3.1.", "3.1.1."]
     assert doc.validate(target="Office2007") == {}
 
 

@@ -37,14 +37,14 @@ def test_every_kind_builds_valid_xml_and_reads_back(kind):
                         legend="bottom", labels="value", number_format="0.0")
     assert space.validate(target="Office2007") == []
     info = chart_info(space)
-    assert info["type"] in EXCEL_CHART_TYPES.values()
-    assert info["title"] == "Sales" and info["legend"] == "bottom" and info["labels"] == ["value"]
-    assert info["categories"] == cats
-    assert info["series"][0]["values"] == list(series[0].values)
+    assert info.kind in EXCEL_CHART_TYPES.values()
+    assert info.title == "Sales" and info.legend == "bottom" and info.labels == ["value"]
+    assert info.categories == cats
+    assert info.series[0].values == list(series[0].values)
     if kind not in ("pie", "doughnut"):
-        assert (info["x_title"], info["y_title"]) == ("X", "Y")
-        assert info["number_format"] == "0.0"
-        assert info["series"][1]["values"] == [95, None, 99]   # a gap stays a gap
+        assert (info.x_title, info.y_title) == ("X", "Y")
+        assert info.number_format == "0.0"
+        assert info.series[1].values == [95, None, 99]   # a gap stays a gap
 
 
 @pytest.mark.parametrize("kind,options,expected", [
@@ -62,22 +62,22 @@ def test_every_kind_builds_valid_xml_and_reads_back(kind):
 def test_type_vocabulary_matches_excel_chart_types(kind, options, expected):
     cats = [1, 2, 3] if kind == "scatter" else ["a", "b", "c"]
     space = build_chart(kind, cats, [Series("s", [1, 2, 3])], **options)
-    assert chart_info(space)["type"] == expected
+    assert chart_info(space).kind == expected
     assert expected in EXCEL_CHART_TYPES.values()
 
 
 def test_colours_are_always_explicit():
     """Without colours, LibreOffice draws empty bars: oox writes the palette."""
     info = chart_info(build_chart("column", ["a"], [Series("x", [1]), Series("y", [2])]))
-    assert [s["color"] for s in info["series"]] == list(PALETTE[:2])
+    assert [s.color for s in info.series] == list(PALETTE[:2])
     pie = chart_info(build_chart("pie", ["a", "b", "c"], [Series("x", [1, 2, 3])],
                                  colors=["FF0000"]))
-    assert pie["series"][0]["point_colors"] == ["FF0000", PALETTE[1], PALETTE[2]]
+    assert pie.series[0].point_colors == ["FF0000", PALETTE[1], PALETTE[2]]
 
 
 def test_no_title_suppresses_excels_automatic_title():
     space = build_chart("pie", ["a"], [Series("Only series", [1])])
-    assert chart_info(space)["title"] is None
+    assert chart_info(space).title is None
     auto = space.find(".//{http://schemas.openxmlformats.org/drawingml/2006/chart}autoTitleDeleted")
     assert auto.get("val") == "1"
 
@@ -119,15 +119,15 @@ def test_excel_chart_from_range_round_trip():
     assert _all_parts_valid(book) == []
     back = _reload(book)
     first, second = back.charts("Sales Data")
-    assert first["anchor"] == "E2" and first["name"] == "Chart 1" and first["type"] == "column"
-    assert [s["name"] for s in first["series"]] == ["Q1", "Q2"]
-    assert first["series"][1]["values"] == [135, 110, 84.5]
-    assert first["series"][0]["values_ref"] == "'Sales Data'!$B$2:$B$4"
-    assert first["series"][0]["categories_ref"] == "'Sales Data'!$A$2:$A$4"
-    assert first["categories"] == ["North", "South", "West"]
-    assert second["type"] == "line" and second["categories"] == ["Q1", "Q2"]
-    assert [s["name"] for s in second["series"]] == ["North", "South", "West"]
-    assert second["series"][2]["values_ref"] == "'Sales Data'!$B$4:$C$4"
+    assert first.anchor == "E2" and first.name == "Chart 1" and first.kind == "column"
+    assert [s.name for s in first.series] == ["Q1", "Q2"]
+    assert first.series[1].values == [135, 110, 84.5]
+    assert first.series[0].values_ref == "'Sales Data'!$B$2:$B$4"
+    assert first.series[0].categories_ref == "'Sales Data'!$A$2:$A$4"
+    assert first.categories == ["North", "South", "West"]
+    assert second.kind == "line" and second.categories == ["Q1", "Q2"]
+    assert [s.name for s in second.series] == ["North", "South", "West"]
+    assert second.series[2].values_ref == "'Sales Data'!$B$4:$C$4"
     assert sorted(p for p in back.package.parts if "chart" in p) == \
         ["/xl/charts/chart1.xml", "/xl/charts/chart2.xml"]
 
@@ -158,8 +158,8 @@ def test_excel_chart_values_come_from_cells():
     book.append_row("S", ["b", "n/a"])                 # text: a gap in the series
     book.add_chart("S", "column", "A1:B3")
     (info,) = book.charts("S")
-    assert info["series"][0]["values"] == [2, None]
-    assert info["series"][0]["name"] == "Amount"
+    assert info.series[0].values == [2, None]
+    assert info.series[0].name == "Amount"
 
 
 def test_excel_chart_needs_a_header_and_label_column():
@@ -180,16 +180,16 @@ def test_word_chart_with_embedded_workbook():
     assert _all_parts_valid(doc) == []
     back = _reload(doc)
     col, pie = back.charts()
-    assert col["type"] == "column" and col["title"] == "Sales"
-    assert col["series"][1] == {**col["series"][1], "name": "South", "values": [95, None, 99],
-                                "values_ref": "Sheet1!$C$2:$C$4",
-                                "categories_ref": "Sheet1!$A$2:$A$4"}
-    assert pie["type"] == "pie" and pie["series"][0]["name"] == "Share"
+    assert col.kind == "column" and col.title == "Sales"
+    south = col.series[1]
+    assert (south.name, list(south.values), south.values_ref, south.categories_ref) == (
+        "South", [95, None, 99], "Sheet1!$C$2:$C$4", "Sheet1!$A$2:$A$4")
+    assert pie.kind == "pie" and pie.series[0].name == "Share"
     # the embedded workbook holds the same data, at the referenced cells
     space = back.package.parts["/word/charts/chart1.xml"].element
     ext = space.find("{http://schemas.openxmlformats.org/drawingml/2006/chart}externalData")
     part = back.package.parts["/word/charts/chart1.xml"]
-    rel = part.rels.items[ext.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id")]
+    rel = part.rels[ext.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id")]
     book = open_document(io.BytesIO(back.package.parts[part.resolve(rel.target)].to_bytes()))
     assert book.values("Sheet1") == [["", "North", "South"], ["Q1", 120, 95],
                                      ["Q2", 135, None], ["Q3", 150, 99]]
@@ -211,10 +211,10 @@ def test_powerpoint_chart_per_slide():
     back = _reload(pres)
     a, b = back.slides
     (line,) = back.charts(a)
-    assert line["type"] == "line_markers" and line["y_title"] == "count"
-    assert [s["name"] for s in line["series"]] == ["Visits", "Orders"]
-    assert [c["type"] for c in back.charts(b)] == ["doughnut", "scatter_smooth"]
-    assert back.charts(b)[1]["categories"] == [1, 2, 3]
+    assert line.kind == "line_markers" and line.y_title == "count"
+    assert [s.name for s in line.series] == ["Visits", "Orders"]
+    assert [c.kind for c in back.charts(b)] == ["doughnut", "scatter_smooth"]
+    assert back.charts(b)[1].categories == [1, 2, 3]
     assert sorted(p for p in back.package.parts if "/charts/" in p or "/embeddings/" in p) == [
         "/ppt/charts/chart1.xml", "/ppt/charts/chart2.xml", "/ppt/charts/chart3.xml",
         "/ppt/embeddings/package1.xlsx", "/ppt/embeddings/package2.xlsx",
@@ -239,10 +239,10 @@ def test_column_and_line_on_a_secondary_axis():
     assert space.validate(target="Office2007") == []
     assert space.validate(level="full") == []
     info = chart_info(space)
-    assert info["types"] == ["column", "line_markers"]
-    assert [(s["name"], s["type"], s["axis"]) for s in info["series"]] == [
+    assert info.plot_kinds == ["column", "line_markers"]
+    assert [(s.name, s.kind, s.axis) for s in info.series] == [
         ("Revenue", "column", "primary"), ("Margin", "line_markers", "secondary")]
-    assert (info["y_title"], info["y2_title"], info["x_title"]) == ("EUR k", "Margin", None)
+    assert (info.y_title, info.y2_title, info.x_title) == ("EUR k", "Margin", None)
     # series keep their index and order, so the legend keeps the given order
     idx = [s.first("c:idx").get("val") for s in space.iter(f"{{{C}}}ser")]
     assert idx == ["0", "1"]
@@ -252,18 +252,18 @@ def test_areas_behind_columns_behind_lines_on_one_axis():
     series = [Series("L", [1, 2, 3], kind="line"), Series("C", [2, 3, 4]),
               Series("A", [3, 4, 5], kind="area")]
     info = chart_info(build_chart("column", ["a", "b", "c"], series))
-    assert info["types"] == ["area", "column", "line_markers"]
-    assert {s["axis"] for s in info["series"]} == {"primary"}
-    assert [s["name"] for s in info["series"]] == ["A", "C", "L"]     # as drawn
+    assert info.plot_kinds == ["area", "column", "line_markers"]
+    assert {s.axis for s in info.series} == {"primary"}
+    assert [s.name for s in info.series] == ["A", "C", "L"]     # as drawn
 
 
 def test_secondary_by_index_and_same_kind_on_both_axes():
     series = [Series("Big", [1000, 2000]), Series("Small", [1, 2])]
     space = build_chart("line", ["x", "y"], series, secondary=[1])
     info = chart_info(space)
-    assert info["types"] == ["line_markers", "line_markers"]
-    assert [s["axis"] for s in info["series"]] == ["primary", "secondary"]
-    assert info["y2_title"] is None
+    assert info.plot_kinds == ["line_markers", "line_markers"]
+    assert [s.axis for s in info.series] == ["primary", "secondary"]
+    assert info.y2_title is None
 
 
 @pytest.mark.parametrize("kind,options,message", [
@@ -293,9 +293,9 @@ def test_excel_combination_chart_from_a_range():
     again = _reload(book)
     assert _all_parts_valid(again) == []
     info = again.charts("Data")[0]
-    assert [(s["name"], s["type"], s["axis"]) for s in info["series"]] == [
+    assert [(s.name, s.kind, s.axis) for s in info.series] == [
         ("Units", "column", "primary"), ("Price", "line_markers", "secondary")]
-    assert info["series"][1]["values"] == [2.5, 2.25, 2.75]
+    assert info.series[1].values == [2.5, 2.25, 2.75]
 
 
 def test_word_and_powerpoint_combination_charts():
@@ -311,8 +311,8 @@ def test_word_and_powerpoint_combination_charts():
     w_info = _reload(doc).charts()[0]
     deck2 = _reload(deck)
     p_info = deck2.charts(deck2.slides[0])[0]
-    assert [s["axis"] for s in w_info["series"]] == ["primary", "secondary"]
-    assert [(s["type"], s["axis"]) for s in p_info["series"]] == [
+    assert [s.axis for s in w_info.series] == ["primary", "secondary"]
+    assert [(s.kind, s.axis) for s in p_info.series] == [
         ("column", "primary"), ("area", "secondary")]
 
 
@@ -328,9 +328,9 @@ def test_excel_charts_without_caches_read_their_cells():
     for cache in list(space.iter(f"{{{C}}}numCache", f"{{{C}}}strCache")):
         cache.getparent().remove(cache)
     info = book.charts("S")[0]
-    assert info["series"][0]["name"] == "v"
-    assert info["series"][0]["values"] == [1, 2]
-    assert info["categories"] == ["a", "b"]
+    assert info.series[0].name == "v"
+    assert info.series[0].values == [1, 2]
+    assert info.categories == ["a", "b"]
 
 
 # -- chart sheets ------------------------------------------------------------------------
@@ -353,8 +353,8 @@ def test_chart_sheet_is_a_tab_but_not_a_worksheet():
     again = _reload(book)
     assert again.validate(level="full") == {}
     info = again.charts("Chart")[0]
-    assert (info["type"], info["title"], info["anchor"]) == ("pie", "Share", None)
-    assert info["series"][0]["values"] == [1, 2]
+    assert (info.kind, info.title, info.anchor) == ("pie", "Share", None)
+    assert info.series[0].values == [1, 2]
     assert again.defined_names() == {"Notes!Here": "Notes!$A$1"}   # localSheetId counts tabs
     assert again.chart_sheet("Chart").tag.endswith("}chartsheet")
 
@@ -372,7 +372,7 @@ def test_workbook_readers_skip_chart_sheets_from_other_writers(tmp_path):
     wb.close()
     book = open_document(path)
     assert book.sheet_names == ["Data"] and book.tab_names == ["Data", "Graph"]
-    assert [c["type"] for c in book.charts("Graph")] == ["line"]
+    assert [c.kind for c in book.charts("Graph")] == ["line"]
     from tools.interop import check
 
     assert check(str(path))["ok"]

@@ -63,7 +63,7 @@ def _readers(doc) -> list[str]:
             doc.hyperlinks(name)
             doc.validations(name)
             doc.merged_cells(name)
-            doc.page_setup_info(name)
+            doc.page_setup(name)
         doc.defined_names()
         found.append(f"{len(doc.sheet_names)} sheets")
     elif isinstance(doc, PresentationDocument):

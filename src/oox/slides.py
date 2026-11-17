@@ -1,13 +1,13 @@
 """Slide content beyond text boxes: shapes with fills, tables, speaker notes,
 picture placeholders, and a reader for what a slide holds.
 
-    deck.add_shape(slide, "roundRect", Inches(1), Inches(2), Inches(3), Inches(1),
+    deck.add_shape(slide, "roundRect", x=72, y=144, width=216, height=72,
                    text="Step 1", fill="2F5496")
-    deck.add_table(slide, [["Region", "Q1"], ["North", 120]], Inches(1), Inches(3.5),
-                   Inches(6), style="Medium Style 2 - Accent 1")
+    deck.add_table(slide, [["Region", "Q1"], ["North", 120]], y=Inches(3.5),
+                   width=Inches(6), style="Medium Style 2 - Accent 1")
     deck.set_notes(slide, "Mention the North region first.")
     deck.set_placeholder_picture(slide, "pic", "photo.jpg")   # crops to fill, like PowerPoint
-    deck.shapes(slide)    # [{"kind": "table", "name": ..., "text": ...}, ...]
+    deck.shapes(slide)    # [Shape(kind="table", name=..., text=...), ...]
 
 Tables use PowerPoint's built-in table styles, referenced by GUID
 (``TABLE_STYLES`` names a few; any GUID works).  Notes need a notes master,
@@ -23,7 +23,7 @@ from . import drawing
 from .element import OoxElement
 from .grammar import URI
 from .ns import a, p
-from .units import Inches
+from .units import DRAWING_LIMIT, Inches, emu
 
 if TYPE_CHECKING:
     from .presentation import PresentationDocument
@@ -75,18 +75,19 @@ def _text_of(container) -> str:
 
 
 # -- shapes -------------------------------------------------------------------------
-def add_shape(deck: PresentationDocument, slide: OoxElement, shape: str, x: int, y: int,
-              cx: int, cy: int, *, text: str | None = None, fill: str | None = "4472C4",
+def add_shape(deck: PresentationDocument, slide: OoxElement, shape: str,
+              box: tuple[int, int, int, int], *, text: str | None = None, fill: str | None = "4472C4",
               line: str | None = None, line_width: float = 1.0, size: float | None = None,
               bold: bool = False, color: str | None = "FFFFFF", align: str | None = "center",
               name: str | None = None) -> OoxElement:
     """An auto shape (``shape`` = preset geometry: rect, roundRect, ellipse,
     rightArrow, chevron, ...).  ``fill``/``line`` as hex RGB or ``None``;
-    ``line_width`` in points; text centred and white by default."""
+    ``line_width`` in points; text centred and white by default.  ``box`` is
+    (x, y, cx, cy) in EMU (``deck.add_shape`` takes points)."""
     if shape not in SHAPES:
         raise ValueError(f"shape {shape!r}: use one of {sorted(SHAPES)}")
     n = drawing.max_shape_id(slide) + 1
-    sp_pr = drawing.xfrm(x, y, cx, cy)
+    sp_pr = drawing.xfrm(*box)
     geom = a.PrstGeom(a.AvLst(), prst=shape)
     fill_el = a.SolidFill(a.SrgbClr(val=fill)) if fill else a.NoFill()
     ln = a.Ln(a.SolidFill(a.SrgbClr(val=line)), w=int(line_width * 12700)) if line \
@@ -104,18 +105,19 @@ def add_shape(deck: PresentationDocument, slide: OoxElement, shape: str, x: int,
 
 
 # -- tables -------------------------------------------------------------------------
-def add_table(deck: PresentationDocument, slide: OoxElement, rows, x: int, y: int,
-              cx: int = Inches(8), cy: int | None = None, *, header: bool = True,
+def add_table(deck: PresentationDocument, slide: OoxElement, rows,
+              box: tuple[int, int, int, int | None], *, header: bool = True,
               banded: bool = True, first_column: bool = False,
               style: str | None = "Medium Style 2 - Accent 1",
-              col_widths: list[int] | None = None, row_height: int = Inches(0.4),
+              widths: list[float] | None = None, row_height: float = Inches(0.4),
               size: float | None = None, merges=(), name: str | None = None) -> OoxElement:
     """A table from a list of rows (values become text; ``None`` is empty).
 
     ``style`` is a name from ``TABLE_STYLES`` or a GUID; ``header``,
     ``banded``, ``first_column`` switch the style's options.  ``merges`` are
-    ``"A1:B1"``-style ranges (columns A.., rows 1..).  ``cy`` defaults to
-    rows x ``row_height``.  Returns the ``p:graphicFrame``.
+    ``"A1:B1"``-style ranges (columns A.., rows 1..).  ``box`` is (x, y, cx,
+    cy) in EMU, cy None for rows x ``row_height``; ``widths`` (per column) and
+    ``row_height`` in points or ``Length``.  Returns the ``p:graphicFrame``.
     """
     from .xlsheet import parse_range
 
@@ -125,10 +127,12 @@ def add_table(deck: PresentationDocument, slide: OoxElement, rows, x: int, y: in
     ncols = max(len(r) for r in rows)
     for r in rows:
         r.extend([None] * (ncols - len(r)))
-    widths = col_widths or [cx // ncols] * ncols
-    if len(widths) != ncols:
-        raise ValueError(f"{len(widths)} column widths for {ncols} columns")
-    height = row_height if cy is None else cy // len(rows)
+    x, y, cx, cy = box
+    cols = ([emu(v, "widths", DRAWING_LIMIT) for v in widths] if widths
+            else [cx // ncols] * ncols)
+    if len(cols) != ncols:
+        raise ValueError(f"{len(cols)} column widths for {ncols} columns")
+    height = emu(row_height, "row_height", DRAWING_LIMIT) if cy is None else cy // len(rows)
     span: dict[tuple[int, int], tuple[int, int]] = {}
     covered: dict[tuple[int, int], tuple[bool, bool]] = {}
     for ref in merges:
@@ -145,7 +149,7 @@ def add_table(deck: PresentationDocument, slide: OoxElement, rows, x: int, y: in
                      firstCol=True if first_column else None)
     if guid:
         tbl_pr.add(a.TableStyleId(text=guid))
-    tbl = a.Tbl(tbl_pr, a.TblGrid(*[a.GridCol(w=w) for w in widths]))
+    tbl = a.Tbl(tbl_pr, a.TblGrid(*[a.GridCol(w=w) for w in cols]))
     for ri, row in enumerate(rows):
         tr = a.Tr(h=height)
         for ci, value in enumerate(row):
@@ -170,7 +174,7 @@ def add_table(deck: PresentationDocument, slide: OoxElement, rows, x: int, y: in
     frame = p.GraphicFrame(
         p.NvGraphicFramePr(p.CNvPr(id=n, name=name or f"Table {n}"),
                            p.CNvGraphicFramePr(a.GraphicFrameLocks(noGrp=True)), p.NvPr()),
-        p.Xfrm(a.Off(x=x, y=y), a.Ext(cx=sum(widths), cy=height * len(rows))),
+        p.Xfrm(a.Off(x=x, y=y), a.Ext(cx=sum(cols), cy=height * len(rows))),
         a.Graphic(a.GraphicData(tbl, uri=TABLE_URI)),
     )
     deck._tree(slide).add(frame)
@@ -399,11 +403,26 @@ def set_placeholder_picture(deck: PresentationDocument, slide: OoxElement, which
 
 
 # -- reading ------------------------------------------------------------------------
-def shapes(deck: PresentationDocument, slide: OoxElement) -> list[dict]:
-    """What a slide holds, in z-order: kind (placeholder, text, shape,
-    picture, table, chart, group, other), name, text, preset geometry,
-    placeholder ``(type, idx)``."""
+def _position(el: OoxElement, local: str) -> tuple:
+    from .units import points
+
+    xfrm = (el.find(f"{{{P}}}xfrm") if local == "graphicFrame"
+            else el.find(f"{{{P}}}grpSpPr/{{{A}}}xfrm") if local == "grpSp"
+            else el.find(f"{{{P}}}spPr/{{{A}}}xfrm"))
+    off = xfrm.find(f"{{{A}}}off") if xfrm is not None else None
+    ext = xfrm.find(f"{{{A}}}ext") if xfrm is not None else None
+    if off is None or ext is None:
+        return None, None, None, None
+    return (points(int(off.get("x", "0"))), points(int(off.get("y", "0"))),
+            points(int(ext.get("cx", "0"))), points(int(ext.get("cy", "0"))))
+
+
+def shapes(deck: PresentationDocument, slide: OoxElement) -> list:
+    """A ``Shape`` for what a slide holds, in z-order: kind (placeholder,
+    text_box, shape, picture, table, chart, group, other), name, text,
+    preset geometry, ``Placeholder``, position and size in points."""
     from .presentation import placeholder_info
+    from .records import Placeholder, Shape
 
     out = []
     for el in deck._tree(slide):
@@ -413,19 +432,19 @@ def shapes(deck: PresentationDocument, slide: OoxElement) -> list[dict]:
         if local in ("nvGrpSpPr", "grpSpPr", "extLst"):
             continue
         cnv = el.find(f".//{{{P}}}cNvPr")
+        name = cnv.get("name") if cnv is not None else None
         info = placeholder_info(el)
-        entry = {"name": cnv.get("name") if cnv is not None else None,
-                 "placeholder": info, "text": None, "geometry": None}
+        text, geometry = None, None
         if local == "sp":
             geom = el.find(f"{{{P}}}spPr/{{{A}}}prstGeom")
-            entry["geometry"] = geom.get("prst") if geom is not None else None
+            geometry = geom.get("prst") if geom is not None else None
             body = el.find(f"{{{P}}}txBody")
-            entry["text"] = _text_of(body) if body is not None else None
+            text = _text_of(body) if body is not None else None
             box = el.find(f"{{{P}}}nvSpPr/{{{P}}}cNvSpPr")
             if info is not None:
                 kind = "placeholder"
             elif box is not None and box.get("txBox") in ("1", "true"):
-                kind = "text"
+                kind = "text_box"
             else:
                 kind = "shape"
         elif local == "pic":
@@ -437,23 +456,27 @@ def shapes(deck: PresentationDocument, slide: OoxElement) -> list[dict]:
                     "http://schemas.openxmlformats.org/drawingml/2006/chart": "chart"
                     }.get(uri, "other")
             if kind == "table":
-                entry["text"] = "\n".join("\t".join(r) for r in table_info(el)["rows"])
+                text = "\n".join("\t".join(r) for r in table_info(el)["rows"])
         elif local == "grpSp":
             kind = "group"
         else:
             kind = "other"
-        entry["kind"] = kind
-        out.append(entry)
+        x, y, width, height = _position(el, local)
+        out.append(Shape(kind, name=name, text=text,
+                         placeholder=Placeholder(info[0], info[1], name, el) if info else None,
+                         geometry=geometry, x=x, y=y, width=width, height=height, element=el))
     return out
 
 
-def tables(deck: PresentationDocument, slide: OoxElement) -> list[dict]:
-    """``table_info`` for each table on a slide, with its "name"."""
+def tables(deck: PresentationDocument, slide: OoxElement) -> list:
+    """A ``SlideTableInfo`` for each table on a slide (cell texts, merges,
+    style and switches, name)."""
+    from .records import SlideTableInfo
+
     out = []
     for frame in deck._tree(slide).iterchildren(f"{{{P}}}graphicFrame"):
         if frame.find(f".//{{{A}}}tbl") is not None:
             info = table_info(frame)
             cnv = frame.find(f".//{{{P}}}cNvPr")
-            info["name"] = cnv.get("name") if cnv is not None else None
-            out.append(info)
+            out.append(SlideTableInfo(name=cnv.get("name") if cnv is not None else None, **info))
     return out

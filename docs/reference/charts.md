@@ -15,6 +15,7 @@ Series(
     categories_ref: str | None = None,
     kind: str | None = None,
     axis: str = 'primary',
+    point_colors: Sequence[str | None] = (),
 ) -> None
 ```
 
@@ -22,7 +23,7 @@ One data series.  `categories` overrides the chart's categories (for
 scatter: the x values).  The `*_ref` fields are cell references
 (`Sheet1!$B$2:$B$5`); without them the values are written as literals.
 
-Fields: `name`, `values`, `categories`, `color`, `name_ref`, `values_ref`, `categories_ref`, `kind`, `axis`
+Fields: `name`, `values`, `categories`, `color`, `name_ref`, `values_ref`, `categories_ref`, `kind`, `axis`, `point_colors`
 
 ## `oox.charts`
 
@@ -35,7 +36,7 @@ from oox.charts import Series, build_chart, chart_info
 space = build_chart("column", ["Q1", "Q2", "Q3"],
                     [Series("North", [120, 135, 150]), Series("South", [95, 110, 99])],
                     title="Sales", y_title="EUR k", legend="bottom", labels="value")
-chart_info(space)["type"]        # "column"
+chart_info(space).kind           # "column"
 ```
 
 The applications wrap this: `SpreadsheetDocument.add_chart` (series from a
@@ -117,15 +118,16 @@ A `Series` can also carry `kind` and `axis` itself.
 ### `chart_info`
 
 ```python
-chart_info(space: OoxElement) -> dict
+chart_info(space: OoxElement)
 ```
 
-Describe a `c:chartSpace`: type (Excel's vocabulary, see
-`EXCEL_CHART_TYPES`), title, legend position, axis titles, value number
-format, data labels, and per series its name, values, categories, refs,
-colour, "type" (its plot's, for combination charts) and "axis" ("primary"
-or "secondary"; the secondary value axis's title is "y2_title").  Series
-come in plot order (`c:order`).
+Describe a `c:chartSpace` as a `Chart` record (`oox.records`):
+kind (Excel's vocabulary, see `EXCEL_CHART_TYPES`), title, legend
+position, axis titles, value number format, data labels, and its
+`Series` with names, values, categories, refs, colours, kind (its
+plot's, for combination charts) and axis ("primary" or "secondary"; the
+secondary value axis's title is `y2_title`).  Series come in plot order
+(`c:order`).
 
 ### `PALETTE`
 

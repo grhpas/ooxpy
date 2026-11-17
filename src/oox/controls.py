@@ -9,7 +9,7 @@ date and check box; reading and filling them by tag.
 
     doc.fill_controls({"name": "Ada", "dept": "Finance",
                        "start": date(2026, 11, 14), "agree": True})
-    doc.content_controls()   # [{"tag": "name", "type": "text", "value": "Ada", ...}, ...]
+    doc.content_controls()   # [ContentControl(tag="name", type="text", value="Ada", ...)]
 
 Controls are inline (inside a paragraph).  Readers also see block-level ones
 (controls holding whole paragraphs, as Word templates often use).  Check
@@ -211,12 +211,16 @@ def _info(sdt: OoxElement) -> dict[str, Any]:
     return info
 
 
-def content_controls(doc: WordprocessingDocument) -> list[dict[str, Any]]:
-    """Every content control (body, headers, footers, notes) in order:
-    ``{"tag", "title", "type", "value", "placeholder", ...}``.  ``value`` is
-    the text (None while the placeholder shows), a bool for check boxes;
-    drop-downs add ``items``, dates add ``date``."""
-    return [_info(sdt) for root in _stories(doc) for sdt in root.iter(_q("sdt"))]
+def content_controls(doc: WordprocessingDocument) -> list:
+    """A ``ContentControl`` for every content control (body, headers,
+    footers, notes), in order: tag, title, type, value, placeholder.
+    ``value`` is the text (None while the placeholder shows), a bool for
+    check boxes; drop-downs have ``items``, dates a ``date``."""
+    from .records import ContentControl
+    from .walk import iter_story
+
+    return [ContentControl(**_info(sdt)) for root in _stories(doc)
+            for sdt in iter_story(root, _q("sdt"))]
 
 
 def _set_content(doc: WordprocessingDocument, sdt: OoxElement, text: str) -> None:

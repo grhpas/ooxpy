@@ -22,16 +22,20 @@ OUT = ROOT / "docs" / "reference"
 
 COMMON = ["open", "save", "validate", "properties", "extended_properties", "custom_properties",
           "conformance", "add_picture_image", "add_image", "add_part", "related_parts", "relate",
-          "part_of", "getElementsByType", "addPicture", "addPictureFromFile",
+          "part_of", "image_of", "getElementsByType", "addPicture", "addPictureFromFile",
           "addPictureFromString", "MAIN_CONTENT_TYPES"]
 
 TOPICS: dict[str, list[tuple[str, list[str]]]] = {
     "WordprocessingDocument": [
-        ("Creating and structure", ["new", "body", "text", "document", "settings", "styles"]),
+        ("Creating and structure", ["new", "body", "text", "document", "settings", "styles",
+                                    "ensure_settings", "ensure_styles"]),
+        ("Parts", ["styles_part", "settings_part", "numbering_part", "theme_part",
+                   "footnotes_part", "endnotes_part", "comments_part", "font_table_part"]),
         ("Text and styles", ["add_heading", "add_paragraph", "add_run", "format_paragraph",
-                             "add_style", "style_id", "ensure_style", "effective_format",
+                             "add_style", "style_id", "ensure_style", "formatting",
+                             "effective_format",
                              "outline_level", "add_page_break"]),
-        ("Lists", ["new_list", "list_labels", "numbering"]),
+        ("Lists", ["new_list", "list_labels", "numbering", "ensure_numbering"]),
         ("Sections, headers and footers", ["sections", "add_section", "even_and_odd_headers"]),
         ("Links, bookmarks, notes and comments", [
             "add_hyperlink", "hyperlinks", "add_bookmark", "bookmarks", "add_footnote",
@@ -51,6 +55,7 @@ TOPICS: dict[str, list[tuple[str, list[str]]]] = {
     ],
     "SpreadsheetDocument": [
         ("Workbook and sheets", ["new", "workbook", "spreadsheet", "add_sheet", "sheet",
+                                 "shared_strings_part", "styles_part", "theme_part",
                                  "sheet_names", "tab_names", "chart_sheet_names", "worksheets",
                                  "sheet_data", "cell_element"]),
         ("Values", ["set_value", "append_row", "value", "values", "cells", "display_text",
@@ -58,13 +63,13 @@ TOPICS: dict[str, list[tuple[str, list[str]]]] = {
         ("Cell styles", ["cell_style", "style_range", "cell_format"]),
         ("Layout", ["set_column_width", "column_width", "autofit_columns", "set_row_height",
                     "row_height", "merge_cells", "unmerge_cells", "merged_cells",
-                    "freeze_panes", "frozen_panes", "auto_filter", "auto_filter_range",
+                    "set_frozen_panes", "frozen_panes", "auto_filter", "auto_filter_range",
                     "define_name", "defined_names", "add_validation", "validations"]),
         ("Conditional formatting", ["conditional_format", "conditional_formats"]),
         ("Tables", ["add_table", "tables"]),
         ("Comments and hyperlinks", ["add_comment", "comments", "add_hyperlink", "hyperlinks"]),
-        ("Printing and sheet options", ["page_setup", "page_setup_info", "sheet_options",
-                                        "sheet_options_info"]),
+        ("Printing and sheet options", ["set_page_setup", "page_setup", "set_sheet_options",
+                                        "sheet_options"]),
         ("Protection", ["protect_sheet", "unprotect_sheet", "protect_workbook",
                         "workbook_protection", "check_workbook_password", "unprotect_workbook"]),
         ("Pictures and charts", ["add_picture", "add_chart", "add_chart_sheet", "chart_sheet",
@@ -73,10 +78,10 @@ TOPICS: dict[str, list[tuple[str, list[str]]]] = {
     "PresentationDocument": [
         ("Deck, slides and layouts", ["new", "presentation", "slides", "add_slide", "masters",
                                       "layouts", "layout_names", "layout", "add_layout",
-                                      "slide_layout"]),
+                                      "slide_layout", "slide_size", "content_area"]),
         ("Placeholders", ["placeholders", "placeholder", "set_placeholder_text",
                           "set_placeholder_picture"]),
-        ("Text boxes, shapes and pictures", ["add_textbox", "add_shape", "add_picture",
+        ("Text boxes, shapes and pictures", ["add_text_box", "add_shape", "add_picture",
                                              "shapes"]),
         ("Tables", ["add_table", "tables", "table"]),
         ("Charts", ["add_chart", "charts"]),
@@ -112,6 +117,19 @@ PAGES = [
       ("class", "oox.opc.Limits", None), ("class", "oox.properties.CoreProperties", None),
       ("class", "oox.properties.ExtendedProperties", None),
       ("class", "oox.properties.CustomProperties", None)]),
+    ("records", "Records", "What the readers return: records with named fields, and the "
+     "formatting values the writers take.",
+     [("module", "oox.records", ["Record"])]
+     + [("class", f"oox.records.{n}", []) for n in (
+         "Hyperlink", "Comment", "Chart", "CellFormat", "Note", "ContentControl", "Picture",
+         "Protection", "Revision", "TextBox", "ConditionalFormat", "Validation", "ExcelTable",
+         "PageSetup", "SheetOptions", "WorkbookProtection", "Placeholder", "Shape",
+         "SlideTableInfo", "SlideSection")]
+     + [("class", "oox.numbering.ListItem", []), ("class", "oox.document.ImageData", []),
+        ("class", "oox.resolve.Formatting", None), ("class", "oox.resolve.ParagraphFormat", []),
+        ("class", "oox.resolve.RunFormat", []), ("class", "oox.formatting.LineSpacing", None),
+        ("class", "oox.formatting.Border", []), ("class", "oox.formatting.Borders", []),
+        ("class", "oox.formatting.Tab", [])]),
     ("utilities", "Units and errors", "Length units and the exception hierarchy.",
      [("module", "oox.units", None), ("module", "oox.errors", None)]),
 ]
@@ -179,7 +197,7 @@ def _delegate(func):
 
 
 PUBLIC_MODULES = {"oox", "oox.units", "oox.teletype", "oox.odfcompat", "oox.errors",
-                  "oox.spreadsheet", "oox.charts", "oox.ns"}
+                  "oox.spreadsheet", "oox.charts", "oox.ns", "oox.records"}
 _shown_modules: set[str] = set()  # internal module docs already on the current page
 
 

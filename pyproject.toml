@@ -28,13 +28,12 @@ classifiers = [
   "Topic :: Software Development :: Libraries :: Python Modules",
   "Typing :: Typed",
 ]
-
 [project.urls]
 Homepage = "https://github.com/grhpas/ooxpy"
-Documentation = "https://grhpas.github.io/ooxpy/"
+Documentation = "https://github.com/grhpas/ooxpy/tree/main/docs"
 Source = "https://github.com/grhpas/ooxpy"
 Issues = "https://github.com/grhpas/ooxpy/issues"
-# repository is public (see RELEASING.md).
+Changelog = "https://github.com/grhpas/ooxpy/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "python-docx>=1.1", "python-pptx>=1.0", "openpyxl>=3.1", "XlsxWriter>=3.2", "ruff", "pyright", "pyyaml"]
@@ -42,6 +41,9 @@ docs = ["mkdocs>=1.6,<2", "mkdocs-material>=9.5,<10", "pymdown-extensions>=10"] 
 
 [project.scripts]
 oox = "oox.__main__:console_main"
+
+[project.entry-points.pyinstaller40]
+hook-dirs = "oox.__pyinstaller:get_hook_dirs"
 
 [tool.setuptools.dynamic]
 version = { attr = "oox.__version__" }

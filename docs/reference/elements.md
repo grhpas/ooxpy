@@ -245,8 +245,9 @@ a newline.  Deleted text (`w:delText`) and field codes (`w:instrText`)
 are not `w:t` and are skipped.  Like odfpy, no separator is inserted
 between paragraphs.
 
-Markup-compatibility fallbacks (`mc:Fallback`, e.g. the VML copy Word
-keeps of every text box) are skipped, so such content counts once.
+Markup compatibility is read as Word reads it (`oox.walk`): of each
+`mc:AlternateContent` only the branch a reader shows counts, so the
+VML copy Word keeps of every text box isn't counted twice.
 `text_boxes=False` also leaves out text boxes below `element`
 (`w:txbxContent`), as Word's `Paragraph.Range.Text` does.
 

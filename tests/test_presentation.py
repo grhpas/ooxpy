@@ -23,9 +23,9 @@ def test_new_deck_has_complete_skeleton():
 def test_slides_text_and_order(tmp_path):
     deck = PresentationDocument.new()
     s1, s2 = deck.add_slide(), deck.add_slide()
-    deck.add_textbox(s1, Inches(1), Inches(1), Inches(8), Inches(1), "Title\nsecond line",
-                     size=40, bold=True, color="1F3864", align="center")
-    deck.add_textbox(s2, Inches(1), Inches(1), Inches(8), Inches(1), "Two")
+    deck.add_text_box(s1, "Title\nsecond line", x=Inches(1), y=Inches(1), width=Inches(8),
+                      height=Inches(1), size=40, bold=True, color="1F3864", align="center")
+    deck.add_text_box(s2, "Two", x=Inches(1), y=Inches(1), width=Inches(8), height=Inches(1))
     assert deck.slides == [s1, s2]
     path = tmp_path / "d.pptx"
     deck.save(path)
@@ -56,7 +56,7 @@ def test_reopen_and_add_slide(tmp_path):
     deck.add_slide()
     deck.save(path)
     again = PresentationDocument.open(path)
-    again.add_textbox(again.add_slide(), 0, 0, Inches(4), Inches(1), "added")
+    again.add_text_box(again.add_slide(), "added", x=0, y=0, width=Inches(4), height=Inches(1))
     again.save(path)
     pr = pptx.Presentation(str(path))
     assert len(pr.slides) == 2 and pr.slides[1].shapes[0].text_frame.text == "added"
@@ -98,7 +98,7 @@ def test_placeholders_on_powerpoint_template(tmp_path):
     assert deck.layout_names[:2] == ["Title Slide", "Title and Content"]  # master order
     slide = deck.add_slide("Two Content")
     # date/footer/slide-number placeholders are not copied, like PowerPoint
-    assert [(t, i) for t, i, _ in deck.placeholders(slide)] == [("title", 0), ("obj", 1), ("obj", 2)]
+    assert [(ph.type, ph.idx) for ph in deck.placeholders(slide)] == [("title", 0), ("obj", 1), ("obj", 2)]
     deck.set_placeholder_text(slide, "title", "Two columns")
     deck.set_placeholder_text(slide, 1, "left")
     deck.set_placeholder_text(slide, 2, "right")
@@ -111,7 +111,7 @@ def test_placeholders_on_powerpoint_template(tmp_path):
 
 
 def test_non_169_slide_size_scales_placeholders():
-    deck = PresentationDocument.new(width=9144000, height=6858000)  # 4:3
-    title = next(sh for t, _, sh in deck.placeholders(deck.masters[0].element) if t == "title")
+    deck = PresentationDocument.new(width=720, height=540)  # 4:3
+    title = next(ph.element for ph in deck.placeholders(deck.masters[0].element) if ph.type == "title")
     off = title.first("p:spPr").first("a:xfrm").first("a:ext")
     assert int(off.get("cx")) == round(10515600 * 9144000 / 12192000)

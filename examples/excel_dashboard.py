@@ -41,19 +41,19 @@ def main(path: str) -> None:
     book.append_row("Lookup", ["Code", "Region"])
     for code, region in (("N", "North"), ("S", "South"), ("W", "West"), ("E", "East")):
         book.append_row("Lookup", [code, region])
-    book.sheet_options("Lookup", hidden=True)
+    book.set_sheet_options("Lookup", hidden=True)
 
     # print setup, tab colour, protection
-    book.page_setup("Sales", orientation="landscape", paper="A4", fit_width=1,
+    book.set_page_setup("Sales", orientation="landscape", paper="A4", fit_width=1,
                     repeat_rows="1:1", footer={"right": "Page {page} of {pages}"})
-    book.sheet_options("Sales", tab_color="2F5496")
+    book.set_sheet_options("Sales", tab_color="2F5496")
     book.autofit_columns("Sales")
     book.protect_sheet("Sales", allow=("sort", "autoFilter"))
 
     book.share_strings()          # store text as Excel does
     assert not book.validate(target="Office2007")
     book.save(path)
-    print(book.tables("Sales")[0]["ref"], len(book.conditional_formats("Sales")),
+    print(book.tables("Sales")[0].ref, len(book.conditional_formats("Sales")),
           book.comments("Sales"))
 
 

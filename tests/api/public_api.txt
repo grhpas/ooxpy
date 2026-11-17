@@ -13,6 +13,7 @@ class oox.document.OoxDocument()
   .custom_properties  property (read-only)
   .extended_properties  property (read-only)
   .getElementsByType(self, element: 'Callable') -> 'list[OoxElement]'
+  .image_of(self, element) -> 'ImageData'
   .open(file: 'str | os.PathLike | IO[bytes]')  classmethod
   .part_of(self, element: 'OoxElement') -> 'Part'
   .properties  property (read-only)
@@ -29,7 +30,7 @@ class oox.document.WordprocessingDocument(OoxDocument)
   .addPictureFromString(self, content: 'bytes', mediatype: 'str | None' = None) -> 'str'
   .add_bookmark(self, name: 'str', paragraph: 'OoxElement') -> 'OoxElement'
   .add_caption(self, text: 'str', label: 'str' = 'Figure', *, before: 'OoxElement | None' = None, after: 'OoxElement | None' = None, sep: 'str' = ': ')
-  .add_chart(self, kind: 'str', categories, series, *, width: 'int' = 5400000, height: 'int' = 2700000, paragraph: 'OoxElement | None' = None, descr: 'str' = '', **options) -> 'OoxElement'
+  .add_chart(self, kind: 'str', categories, series, *, width: 'float' = 5400000, height: 'float' = 2700000, paragraph: 'OoxElement | None' = None, descr: 'str' = '', **options) -> 'OoxElement'
   .add_checkbox(self, paragraph: 'OoxElement', *, tag: 'str', checked: 'bool' = False, title: 'str | None' = None) -> 'OoxElement'
   .add_comment(self, paragraph: 'OoxElement', text: 'str', *, author: 'str' = 'oox', initials: 'str | None' = None, date=None) -> 'OoxElement'
   .add_cross_reference(self, paragraph: 'OoxElement', target, *, what: 'str' = 'text', hyperlink: 'bool' = True) -> 'OoxElement'
@@ -40,68 +41,81 @@ class oox.document.WordprocessingDocument(OoxDocument)
   .add_floating_picture(self, image, **options) -> 'OoxElement'
   .add_footnote(self, paragraph: 'OoxElement', text: 'str') -> 'OoxElement'
   .add_heading(self, text: 'str', level: 'int' = 1) -> 'OoxElement'
-  .add_hyperlink(self, paragraph: 'OoxElement', text: 'str', *, url: 'str | None' = None, anchor: 'str | None' = None, tooltip: 'str | None' = None) -> 'OoxElement'
+  .add_hyperlink(self, paragraph: 'OoxElement', text: 'str', *, target: 'str | None' = None, anchor: 'str | None' = None, tooltip: 'str | None' = None) -> 'OoxElement'
   .add_image(self, image, source: 'Part | None' = None) -> 'tuple[str, images.ImageInfo]'
   .add_page_break(self) -> 'OoxElement'
   .add_paragraph(self, text: 'str' = '', style: 'str | None' = None) -> 'OoxElement'
   .add_part(self, part_type: 'str', source: 'Part | None' = None, *, element: 'OoxElement | None' = None, blob: 'bytes | None' = None, content_type: 'str | None' = None, ext: 'str' = 'xml', folder: 'str | None' = None) -> 'tuple[Part, str]'
-  .add_picture(self, image, *, width: 'int | None' = None, height: 'int | None' = None, paragraph: 'OoxElement | None' = None, descr: 'str' = '', fallback=None) -> 'OoxElement'
+  .add_picture(self, image, *, width: 'float | None' = None, height: 'float | None' = None, paragraph: 'OoxElement | None' = None, descr: 'str' = '', fallback=None) -> 'OoxElement'
   .add_picture_image(self, image, fallback=None, source: 'Part | None' = None) -> 'tuple[str, images.ImageInfo, str | None]'
   .add_run(self, paragraph: 'OoxElement', text: 'str', *, style: 'str | None' = None, **fmt) -> 'OoxElement'
   .add_section(self, start: 'str' = 'nextPage', *, landscape: 'bool | None' = None, page: 'str | None' = None)
   .add_style(self, name: 'str', *, kind: 'str' = 'paragraph', base: 'str | None' = None, next_style: 'str | None' = None, quick: 'bool' = True, **fmt) -> 'str'
-  .add_table(self, rows: 'list[list]', *, widths: 'list[int] | None' = None, style: 'str | None' = 'Table Grid', header_rows: 'int' = 0, bold_header: 'bool' = True, align: 'str | None' = None, before: 'OoxElement | None' = None)
+  .add_table(self, rows: 'list[list]', *, widths: 'list[float] | None' = None, style: 'str | None' = 'Table Grid', header_rows: 'int' = 0, bold_header: 'bool' = True, align: 'str | None' = None, before: 'OoxElement | None' = None)
   .add_text_box(self, content='', **options) -> 'OoxElement'
   .add_text_control(self, paragraph: 'OoxElement', *, tag: 'str', title: 'str | None' = None, text: 'str | None' = None, placeholder: 'str' = 'Click here to enter text.', rich: 'bool' = False, multiline: 'bool' = False) -> 'OoxElement'
   .add_toc(self, levels: 'tuple[int, int]' = (1, 3), title: 'str | None' = 'Contents', *, before: 'OoxElement | None' = None, update_on_open: 'bool' = False) -> 'list[OoxElement]'
   .body  property (read-only)
   .bookmarks(self) -> 'list[str]'
-  .charts(self) -> 'list[dict]'
+  .charts(self) -> 'list[Chart]'
   .check_protection_password(self, password: 'str') -> 'bool'
-  .comments(self) -> 'list[dict]'
+  .comments(self) -> 'list[Comment]'
+  .comments_part  property (read-only)
   .conformance  property
-  .content_controls(self) -> 'list[dict]'
+  .content_controls(self) -> 'list[ContentControl]'
   .custom_properties  property (read-only)
   .document  property (read-only)
-  .effective_format(self, paragraph: 'OoxElement', run: 'OoxElement | None' = None) -> 'dict'
-  .endnotes(self) -> 'list[tuple[int, str]]'
-  .ensure_style(self, style_id: 'str', text_width: 'int' = 9026) -> 'str'
+  .effective_format(self, paragraph: 'OoxElement', run: 'OoxElement | None' = None)
+  .endnotes(self) -> 'list[Note]'
+  .endnotes_part  property (read-only)
+  .ensure_numbering(self) -> 'OoxElement'
+  .ensure_settings(self) -> 'OoxElement'
+  .ensure_style(self, style_id: 'str', text_width: 'float' = 451.3) -> 'str'
+  .ensure_styles(self) -> 'OoxElement'
   .even_and_odd_headers  property
   .extended_properties  property (read-only)
-  .fields(self, all_stories: 'bool' = False) -> 'list[dict]'
+  .fields(self, all_stories: 'bool' = False) -> 'list[Field]'
   .fill_controls(self, values: 'dict', *, strict: 'bool' = True) -> 'int'
-  .footnotes(self) -> 'list[tuple[int, str]]'
+  .font_table_part  property (read-only)
+  .footnotes(self) -> 'list[Note]'
+  .footnotes_part  property (read-only)
   .format_paragraph(self, paragraph: 'OoxElement', **fmt) -> 'OoxElement'
+  .formatting(self)
   .getElementsByType(self, element: 'Callable') -> 'list[OoxElement]'
-  .hyperlinks(self) -> 'list[tuple[str, str]]'
-  .list_labels(self) -> 'list[tuple[OoxElement, str]]'
+  .hyperlinks(self) -> 'list[Hyperlink]'
+  .image_of(self, element) -> 'ImageData'
+  .list_labels(self, *, all_stories: 'bool' = False)
   .new(kind: 'str' = '.docx', *, minimal: 'bool' = False, page: 'str' = 'A4', landscape: 'bool' = False, lang: 'str' = 'en-US') -> 'WordprocessingDocument'  classmethod
   .new_list(self, kind: 'str' = 'bullet', start: 'int' = 1)
   .numbering  property (read-only)
+  .numbering_part  property (read-only)
   .open(file: 'str | os.PathLike | IO[bytes]')  classmethod
   .outline_level(self, paragraph: 'OoxElement') -> 'int'
   .part_of(self, element: 'OoxElement') -> 'Part'
-  .pictures(self) -> 'list[dict]'
+  .pictures(self) -> 'list[Picture]'
   .properties  property (read-only)
   .protect(self, edit: 'str' = 'readOnly', *, password: 'str | None' = None, **options) -> 'None'
-  .protection(self) -> 'dict | None'
+  .protection(self) -> 'Protection | None'
   .reject_all(self) -> 'int'
   .relate(self, source: 'Part', target: 'Part', part_type: 'str') -> 'str'
   .related_parts(self, source: 'Part', part_type: 'str') -> 'list[Part]'
   .replace_text(self, mapping: 'dict[str, str] | str', new: 'str | None' = None) -> 'dict[str, int]'
-  .revisions(self) -> 'list[dict]'
+  .revisions(self) -> 'list[Revision]'
   .save(self, outputfile: 'str | os.PathLike | IO[bytes]', addsuffix: 'bool' = False, *, target: 'str | None' = None, strip: 'bool' = False) -> 'None'
   .sections  property (read-only)
   .set_text_box_text(self, index: 'int', content) -> 'None'
   .settings  property (read-only)
+  .settings_part  property (read-only)
   .style_id(self, style: 'str') -> 'str'
   .styles  property (read-only)
+  .styles_part  property (read-only)
   .suggest_delete(self, paragraph: 'OoxElement', text: 'str', *, author: 'str', date=None, occurrence: 'int' = 1) -> 'OoxElement'
   .suggest_insert(self, paragraph: 'OoxElement', text: 'str', *, author: 'str', date=None, after: 'str | None' = None) -> 'OoxElement'
   .suggest_replace(self, paragraph: 'OoxElement', old: 'str', new: 'str', *, author: 'str', date=None, occurrence: 'int' = 1)
   .tables(self)
   .text  property (read-only)
-  .text_boxes(self) -> 'list[dict]'
+  .text_boxes(self) -> 'list[TextBox]'
+  .theme_part  property (read-only)
   .track_changes  property
   .unprotect(self) -> 'None'
   .update_fields(self, *, now=None) -> 'dict[str, int]'
@@ -118,7 +132,7 @@ class oox.spreadsheet.SpreadsheetDocument(OoxDocument)
   .add_hyperlink(self, sheet: 'str', ref: 'str', target: 'str', *, text: 'str | None' = None, tooltip: 'str | None' = None, style: 'bool' = True) -> 'OoxElement'
   .add_image(self, image, source: 'Part | None' = None) -> 'tuple[str, images.ImageInfo]'
   .add_part(self, part_type: 'str', source: 'Part | None' = None, *, element: 'OoxElement | None' = None, blob: 'bytes | None' = None, content_type: 'str | None' = None, ext: 'str' = 'xml', folder: 'str | None' = None) -> 'tuple[Part, str]'
-  .add_picture(self, sheet: 'str | OoxElement', image, anchor: 'str' = 'A1', *, width: 'int | None' = None, height: 'int | None' = None, descr: 'str' = '', fallback=None) -> 'OoxElement'
+  .add_picture(self, sheet: 'str | OoxElement', image, anchor: 'str' = 'A1', *, width: 'float | None' = None, height: 'float | None' = None, descr: 'str' = '', fallback=None) -> 'OoxElement'
   .add_picture_image(self, image, fallback=None, source: 'Part | None' = None) -> 'tuple[str, images.ImageInfo, str | None]'
   .add_sheet(self, name: 'str') -> 'OoxElement'
   .add_table(self, sheet: 'str', ref: 'str', *, name: 'str | None' = None, style: 'str | None' = 'TableStyleMedium2', totals: 'dict | None' = None, stripes: 'bool' = True, first_column: 'bool' = False, last_column: 'bool' = False) -> 'OoxElement'
@@ -128,33 +142,32 @@ class oox.spreadsheet.SpreadsheetDocument(OoxDocument)
   .auto_filter_range(self, sheet: 'str') -> 'str | None'
   .autofit_columns(self, sheet: 'str', cols: 'str | None' = None, **options) -> 'dict[str, float]'
   .cell_element(self, sheet: 'str | OoxElement', ref: 'str') -> 'OoxElement | None'
-  .cell_format(self, sheet: 'str | OoxElement', ref: 'str') -> 'dict'
+  .cell_format(self, sheet: 'str | OoxElement', ref: 'str') -> 'CellFormat'
   .cell_style(self, **fmt) -> 'int'
   .cells(self, sheet: 'str | OoxElement', *, formulas: 'bool' = False, dates: 'bool' = True) -> 'dict[str, object]'
   .chart_sheet(self, name: 'str') -> 'OoxElement'
   .chart_sheet_names  property (read-only)
-  .charts(self, sheet: 'str') -> 'list[dict]'
+  .charts(self, sheet: 'str') -> 'list[Chart]'
   .check_workbook_password(self, password: 'str') -> 'bool'
   .column_width(self, sheet: 'str', col: 'str') -> 'float | None'
-  .comments(self, sheet: 'str') -> 'dict[str, tuple[str, str]]'
+  .comments(self, sheet: 'str') -> 'dict[str, Comment]'
   .conditional_format(self, sheet: 'str', ref: 'str', rule: 'str', **options) -> 'OoxElement'
-  .conditional_formats(self, sheet: 'str') -> 'list[dict]'
+  .conditional_formats(self, sheet: 'str') -> 'list[ConditionalFormat]'
   .conformance  property
   .custom_properties  property (read-only)
   .define_name(self, name: 'str', sheet: 'str', ref: 'str', *, local: 'bool' = False) -> 'OoxElement'
   .defined_names(self) -> 'dict[str, str]'
   .display_text(self, sheet: 'str | OoxElement', ref: 'str') -> 'str'
   .extended_properties  property (read-only)
-  .freeze_panes(self, sheet: 'str', ref: 'str | None') -> 'None'
   .frozen_panes(self, sheet: 'str') -> 'str | None'
   .getElementsByType(self, element: 'Callable') -> 'list[OoxElement]'
-  .hyperlinks(self, sheet: 'str') -> 'dict[str, str]'
+  .hyperlinks(self, sheet: 'str') -> 'dict[str, Hyperlink]'
+  .image_of(self, element) -> 'ImageData'
   .merge_cells(self, sheet: 'str', ref: 'str') -> 'None'
   .merged_cells(self, sheet: 'str') -> 'list[str]'
   .new(sheet: 'str | None' = 'Sheet1', kind: 'str' = '.xlsx') -> 'SpreadsheetDocument'  classmethod
   .open(file: 'str | os.PathLike | IO[bytes]')  classmethod
-  .page_setup(self, sheet: 'str', **options) -> 'None'
-  .page_setup_info(self, sheet: 'str') -> 'dict'
+  .page_setup(self, sheet: 'str') -> 'PageSetup'
   .part_of(self, element: 'OoxElement') -> 'Part'
   .properties  property (read-only)
   .protect_sheet(self, sheet: 'str', password: 'str | None' = None, *, allow: 'tuple[str, ...]' = ()) -> 'None'
@@ -164,27 +177,32 @@ class oox.spreadsheet.SpreadsheetDocument(OoxDocument)
   .row_height(self, sheet: 'str', row_index: 'int') -> 'float | None'
   .save(self, outputfile: 'str | os.PathLike | IO[bytes]', addsuffix: 'bool' = False, *, target: 'str | None' = None, strip: 'bool' = False) -> 'None'
   .set_column_width(self, sheet: 'str', cols: 'str', chars: 'float | None') -> 'None'
+  .set_frozen_panes(self, sheet: 'str', ref: 'str | None') -> 'None'
+  .set_page_setup(self, sheet: 'str', **options) -> 'None'
   .set_row_height(self, sheet: 'str', row_index: 'int', points: 'float | None') -> 'None'
+  .set_sheet_options(self, sheet: 'str', **options) -> 'None'
   .set_value(self, sheet: 'str | OoxElement', ref: 'str', value: 'object', *, style: 'int | dict | None' = None) -> 'OoxElement'
   .share_strings(self) -> 'int'
+  .shared_strings_part  property (read-only)
   .sheet(self, name: 'str') -> 'OoxElement'
   .sheet_data(self, sheet: 'str | OoxElement') -> 'OoxElement'
   .sheet_names  property (read-only)
-  .sheet_options(self, sheet: 'str', **options) -> 'None'
-  .sheet_options_info(self, sheet: 'str') -> 'dict'
+  .sheet_options(self, sheet: 'str') -> 'SheetOptions'
   .spreadsheet  property (read-only)
   .style_range(self, sheet: 'str | OoxElement', ref: 'str', style: 'int | dict | None' = None, **fmt) -> 'None'
+  .styles_part  property (read-only)
   .tab_names  property (read-only)
-  .tables(self, sheet: 'str') -> 'list[dict]'
+  .tables(self, sheet: 'str') -> 'list[ExcelTable]'
+  .theme_part  property (read-only)
   .unmerge_cells(self, sheet: 'str', ref: 'str') -> 'None'
   .unprotect_sheet(self, sheet: 'str') -> 'None'
   .unprotect_workbook(self) -> 'None'
   .validate(self, target: 'str | None' = None, level: 'str' = 'basic') -> 'dict[str, list[str]]'
-  .validations(self, sheet: 'str') -> 'list[dict]'
+  .validations(self, sheet: 'str') -> 'list[Validation]'
   .value(self, sheet: 'str | OoxElement', ref: 'str', *, formulas: 'bool' = False, dates: 'bool' = True) -> 'object'
   .values(self, sheet: 'str | OoxElement', *, formulas: 'bool' = False, dates: 'bool' = True) -> 'list[list[object]]'
   .workbook  property (read-only)
-  .workbook_protection(self) -> 'dict | None'
+  .workbook_protection(self) -> 'WorkbookProtection | None'
   .worksheets  property (read-only)
 
 class oox.presentation.PresentationDocument(OoxDocument)
@@ -192,48 +210,51 @@ class oox.presentation.PresentationDocument(OoxDocument)
   .addPicture(self, filename: 'str', mediatype: 'str | None' = None, content: 'bytes | None' = None) -> 'str'
   .addPictureFromFile(self, filename: 'str', mediatype: 'str | None' = None) -> 'str'
   .addPictureFromString(self, content: 'bytes', mediatype: 'str | None' = None) -> 'str'
-  .add_chart(self, slide: 'OoxElement', kind: 'str', categories, series, x: 'int' = 914400, y: 'int' = 1371600, cx: 'int' = 7315200, cy: 'int' = 4114800, *, name: 'str | None' = None, **options) -> 'OoxElement'
+  .add_chart(self, slide: 'OoxElement', kind: 'str', categories, series, *, x: 'float | None' = None, y: 'float | None' = None, width: 'float | None' = None, height: 'float | None' = None, name: 'str | None' = None, **options) -> 'OoxElement'
   .add_image(self, image, source: 'Part | None' = None) -> 'tuple[str, images.ImageInfo]'
   .add_layout(self, layout: 'OoxElement', master: 'Part | None' = None) -> 'Part'
   .add_part(self, part_type: 'str', source: 'Part | None' = None, *, element: 'OoxElement | None' = None, blob: 'bytes | None' = None, content_type: 'str | None' = None, ext: 'str' = 'xml', folder: 'str | None' = None) -> 'tuple[Part, str]'
-  .add_picture(self, slide: 'OoxElement', image, x: 'int' = 914400, y: 'int' = 914400, *, width: 'int | None' = None, height: 'int | None' = None, descr: 'str' = '', fallback=None) -> 'OoxElement'
+  .add_picture(self, slide: 'OoxElement', image, *, x: 'float | None' = None, y: 'float | None' = None, width: 'float | None' = None, height: 'float | None' = None, descr: 'str' = '', fallback=None) -> 'OoxElement'
   .add_picture_image(self, image, fallback=None, source: 'Part | None' = None) -> 'tuple[str, images.ImageInfo, str | None]'
-  .add_shape(self, slide: 'OoxElement', shape: 'str', x: 'int', y: 'int', cx: 'int', cy: 'int', **options) -> 'OoxElement'
+  .add_shape(self, slide: 'OoxElement', shape: 'str', *, x: 'float | None' = None, y: 'float | None' = None, width: 'float | None' = None, height: 'float | None' = None, **options) -> 'OoxElement'
   .add_slide(self, layout: 'Part | str | None' = None) -> 'OoxElement'
-  .add_table(self, slide: 'OoxElement', rows, x: 'int', y: 'int', cx: 'int' = 7315200, cy: 'int | None' = None, **options) -> 'OoxElement'
-  .add_textbox(self, slide: 'OoxElement', x: 'int', y: 'int', cx: 'int', cy: 'int', text: 'str', *, size: 'float | None' = None, bold: 'bool' = False, color: 'str | None' = None, align: 'str | None' = None, lang: 'str' = 'en-US') -> 'OoxElement'
-  .charts(self, slide: 'OoxElement') -> 'list[dict]'
+  .add_table(self, slide: 'OoxElement', rows, *, x: 'float | None' = None, y: 'float | None' = None, width: 'float | None' = None, height: 'float | None' = None, **options) -> 'OoxElement'
+  .add_text_box(self, slide: 'OoxElement', text: 'str', *, x: 'float | None' = None, y: 'float | None' = None, width: 'float | None' = None, height: 'float | None' = None, size: 'float | None' = None, bold: 'bool' = False, color: 'str | None' = None, align: 'str | None' = None, lang: 'str' = 'en-US') -> 'OoxElement'
+  .charts(self, slide: 'OoxElement') -> 'list[Chart]'
   .conformance  property
+  .content_area(self, slide: 'OoxElement') -> 'tuple[float, float, float, float]'
   .custom_properties  property (read-only)
   .extended_properties  property (read-only)
   .getElementsByType(self, element: 'Callable') -> 'list[OoxElement]'
+  .image_of(self, element) -> 'ImageData'
   .layout(self, name: 'str') -> 'Part'
   .layout_names  property (read-only)
   .layouts  property (read-only)
-  .links(self, slide: 'OoxElement') -> 'list[dict]'
+  .links(self, slide: 'OoxElement') -> 'list[Hyperlink]'
   .masters  property (read-only)
-  .new(width: 'int' = 12192000, height: 'int' = 6858000, kind: 'str' = '.pptx', layouts: 'str' = 'standard') -> 'PresentationDocument'  classmethod
+  .new(width: 'float' = 12192000, height: 'float' = 6858000, kind: 'str' = '.pptx', layouts: 'str' = 'standard') -> 'PresentationDocument'  classmethod
   .notes(self, slide: 'OoxElement') -> 'str | None'
   .open(file: 'str | os.PathLike | IO[bytes]')  classmethod
   .part_of(self, element: 'OoxElement') -> 'Part'
   .placeholder(self, slide: 'OoxElement', which: 'str | int') -> 'OoxElement'
-  .placeholders(self, slide: 'OoxElement') -> 'list[tuple[str, int, OoxElement]]'
+  .placeholders(self, slide: 'OoxElement') -> 'list[Placeholder]'
   .presentation  property (read-only)
   .properties  property (read-only)
   .relate(self, source: 'Part', target: 'Part', part_type: 'str') -> 'str'
   .related_parts(self, source: 'Part', part_type: 'str') -> 'list[Part]'
   .save(self, outputfile: 'str | os.PathLike | IO[bytes]', addsuffix: 'bool' = False, *, target: 'str | None' = None, strip: 'bool' = False) -> 'None'
-  .sections(self) -> 'list[tuple[str, list[int]]]'
+  .sections(self) -> 'list[SlideSection]'
   .set_link(self, slide: 'OoxElement', shape, target, *, text: 'str | None' = None, tooltip: 'str | None' = None) -> 'OoxElement'
   .set_notes(self, slide: 'OoxElement', text: 'str') -> 'OoxElement'
   .set_placeholder_picture(self, slide: 'OoxElement', which: 'str | int', image, *, crop: 'bool' = True, descr: 'str' = '') -> 'OoxElement'
   .set_placeholder_text(self, slide: 'OoxElement', which: 'str | int', text: 'str | list', *, lang: 'str' = 'en-US') -> 'OoxElement'
   .set_sections(self, sections) -> 'None'
-  .shapes(self, slide: 'OoxElement') -> 'list[dict]'
+  .shapes(self, slide: 'OoxElement') -> 'list[Shape]'
   .slide_layout(self, slide: 'OoxElement') -> 'str'
+  .slide_size  property (read-only)
   .slides  property (read-only)
   .table(self, slide: 'OoxElement', which: 'int | str' = 0) -> 'SlideTable'
-  .tables(self, slide: 'OoxElement') -> 'list[dict]'
+  .tables(self, slide: 'OoxElement') -> 'list[SlideTableInfo]'
   .validate(self, target: 'str | None' = None, level: 'str' = 'basic') -> 'dict[str, list[str]]'
 
 class oox.element.OoxElement(OdfDomMixin, ElementBase)
@@ -283,6 +304,7 @@ class oox.opc.Package()
   .__init__(self) -> 'None'
   .add_part(self, partname: 'str', content_type: 'str', element: 'OoxElement | None' = None, blob: 'bytes | None' = None) -> 'Part'
   .open(file: 'str | os.PathLike | IO[bytes]', limits: 'Limits' = Limits(max_parts=10000, max_part_size=536870912, max_total_size=2147483648, max_ratio=1000)) -> 'Package'  classmethod
+  .part_of(self, element: 'etree._Element') -> 'Part'
   .relate(self, source: 'Part | None', target: 'Part', reltype: 'str') -> 'str'
   .related(self, source: 'Part | None', reltype: 'str') -> 'Part | None'
   .save(self, file: 'str | os.PathLike | IO[bytes]') -> 'None'
@@ -290,8 +312,10 @@ class oox.opc.Package()
 
 class oox.opc.Part()
   .__init__(self, partname: 'str', content_type: 'str', *, element: 'OoxElement | None' = None, blob: 'bytes | None' = None) -> 'None'
+  .blob  property (read-only)
   .element  property (read-only)
   .is_xml  property (read-only)
+  .related_part(self, rid: 'str') -> 'Part'
   .rels_name  property (read-only)
   .resolve(self, target: 'str') -> 'str'
   .to_bytes(self, strict: 'bool' = False) -> 'bytes'
@@ -315,9 +339,9 @@ class oox.tables.Table()
   .n_rows  property (read-only)
   .rows  property (read-only)
   .set_header_rows(self, n: 'int') -> 'None'
-  .set_row_height(self, row: 'int', twips: 'int', rule: 'str' = 'atLeast') -> 'None'
+  .set_row_height(self, row: 'int', height: 'float', rule: 'str' = 'atLeast') -> 'None'
   .set_text(self, row: 'int', col: 'int', text: 'Any', *, bold: 'bool' = False) -> 'OoxElement'
-  .set_widths(self, widths: 'list[int]') -> 'None'
+  .set_widths(self, widths: 'list[float]') -> 'None'
   .text(self, row: 'int', col: 'int') -> 'str'
   .values(self) -> 'list[list[str | None]]'
   .widths  property (read-only)
@@ -326,16 +350,19 @@ class oox.tables.Table()
 class oox.sections.Section()
   .__init__(self, doc: 'WordprocessingDocument', sect_pr: 'OoxElement') -> 'None'
   .different_first_page  property
-  .footer(self, kind: 'str' = 'default', create: 'bool' = True) -> 'OoxElement | None'
+  .ensure_footer(self, kind: 'str' = 'default') -> 'OoxElement'
+  .ensure_header(self, kind: 'str' = 'default') -> 'OoxElement'
+  .footer(self, kind: 'str' = 'default') -> 'OoxElement | None'
   .footer_text(self, text: 'str', kind: 'str' = 'default', align: 'str' = 'left') -> 'OoxElement'
-  .header(self, kind: 'str' = 'default', create: 'bool' = True) -> 'OoxElement | None'
+  .header(self, kind: 'str' = 'default') -> 'OoxElement | None'
   .header_text(self, text: 'str', kind: 'str' = 'default', align: 'str' = 'left') -> 'OoxElement'
   .linked_to_previous(self, what: 'str' = 'header', kind: 'str' = 'default') -> 'bool'
   .margins  property (read-only)
   .orientation  property
   .page_height  property (read-only)
   .page_width  property (read-only)
-  .set_margins(self, **twips: 'int') -> 'None'
+  .set_margins(self, **margins: 'float') -> 'None'
+  .set_page_size(self, width: 'float', height: 'float') -> 'None'
   .shown(self, what: 'str' = 'header', kind: 'str' = 'default') -> 'OoxElement | None'
   .start  property
   .text_width  property (read-only)
@@ -349,7 +376,7 @@ class oox.numbering.ListHandle()
 
 class oox.slidetable.SlideTable()
   .__init__(self, deck: 'PresentationDocument | None', frame: 'OoxElement') -> 'None'
-  .add_column(self, values: 'list[Any] | None' = None, *, index: 'int | None' = None, width: 'int | None' = None, like: 'int | None' = None) -> 'None'
+  .add_column(self, values: 'list[Any] | None' = None, *, index: 'int | None' = None, width: 'float | None' = None, like: 'int | None' = None) -> 'None'
   .add_row(self, values: 'list[Any] | None' = None, *, index: 'int | None' = None, like: 'int | None' = None) -> 'OoxElement'
   .cell(self, row: 'int', col: 'int') -> 'OoxElement'
   .delete_column(self, col: 'int') -> 'None'
@@ -361,7 +388,7 @@ class oox.slidetable.SlideTable()
   .rows  property (read-only)
   .set_style(self, style: 'str | None' = None, *, header: 'bool | None' = None, banded: 'bool | None' = None, first_column: 'bool | None' = None) -> 'None'
   .set_text(self, row: 'int', col: 'int', text: 'Any', *, size: 'float | None' = None, bold: 'bool | None' = None, color: 'str | None' = None, align: 'str | None' = None) -> 'OoxElement'
-  .set_widths(self, widths: 'list[int]') -> 'None'
+  .set_widths(self, widths: 'list[float]') -> 'None'
   .text(self, row: 'int', col: 'int') -> 'str'
   .unmerge(self, row: 'int', col: 'int') -> 'None'
   .values(self) -> 'list[list[str | None]]'
@@ -418,7 +445,8 @@ class oox.charts.Series()
   .categories_ref: str | None  field
   .kind: str | None  field
   .axis: str  field
-  .__init__(self, name: 'str | None', values: 'Sequence[float | int | None]', categories: 'Sequence | None' = None, color: 'str | None' = None, name_ref: 'str | None' = None, values_ref: 'str | None' = None, categories_ref: 'str | None' = None, kind: 'str | None' = None, axis: 'str' = 'primary') -> None
+  .point_colors: Sequence[str | None]  field
+  .__init__(self, name: 'str | None', values: 'Sequence[float | int | None]', categories: 'Sequence | None' = None, color: 'str | None' = None, name_ref: 'str | None' = None, values_ref: 'str | None' = None, categories_ref: 'str | None' = None, kind: 'str | None' = None, axis: 'str' = 'primary', point_colors: 'Sequence[str | None]' = ()) -> None
 
 class oox.spreadsheet.Formula()
   .expression: str  field
@@ -427,14 +455,372 @@ class oox.spreadsheet.Formula()
 
 class oox.spreadsheet.CellError(str)
 
+class oox.formatting.LineSpacing(tuple)
+  .at_least(points: 'float') -> 'LineSpacing'  classmethod
+  .exactly(points: 'float') -> 'LineSpacing'  classmethod
+  .multiple(n: 'float') -> 'LineSpacing'  classmethod
+  .rule  attribute
+  .value  attribute
+
+class oox.formatting.Border(tuple)
+  .color  attribute
+  .space  attribute
+  .style  attribute
+  .width  attribute
+
+class oox.formatting.Borders()
+  .top: Border | None  field
+  .left: Border | None  field
+  .bottom: Border | None  field
+  .right: Border | None  field
+  .between: Border | None  field
+  .bar: Border | None  field
+  .__init__(self, top: 'Border | None' = None, left: 'Border | None' = None, bottom: 'Border | None' = None, right: 'Border | None' = None, between: 'Border | None' = None, bar: 'Border | None' = None) -> None
+
+class oox.formatting.Tab(tuple)
+  .align  attribute
+  .leader  attribute
+  .position  attribute
+
+class oox.resolve.Formatting()
+  .__init__(self, doc: 'WordprocessingDocument') -> 'None'
+  .mark(self, p: 'OoxElement') -> 'RunFormat'
+  .paragraph(self, p: 'OoxElement') -> 'ParagraphFormat'
+  .run(self, r: 'OoxElement') -> 'RunFormat'
+
+class oox.resolve.RunFormat()
+  .bold: bool  field
+  .italic: bool  field
+  .underline: str | None  field
+  .strike: bool  field
+  .double_strike: bool  field
+  .size: float  field
+  .font: str | None  field
+  .font_east_asia: str | None  field
+  .font_complex: str | None  field
+  .color: str | None  field
+  .highlight: str | None  field
+  .superscript: bool  field
+  .subscript: bool  field
+  .caps: bool  field
+  .small_caps: bool  field
+  .shading: str | None  field
+  .letter_spacing: float  field
+  .hidden: bool  field
+  .language: str | None  field
+  .border: Border | None  field
+  .style: str | None  field
+  .__init__(self, bold: 'bool' = False, italic: 'bool' = False, underline: 'str | None' = None, strike: 'bool' = False, double_strike: 'bool' = False, size: 'float' = 10.0, font: 'str | None' = 'Times New Roman', font_east_asia: 'str | None' = None, font_complex: 'str | None' = None, color: 'str | None' = None, highlight: 'str | None' = None, superscript: 'bool' = False, subscript: 'bool' = False, caps: 'bool' = False, small_caps: 'bool' = False, shading: 'str | None' = None, letter_spacing: 'float' = 0.0, hidden: 'bool' = False, language: 'str | None' = None, border: 'Border | None' = None, style: 'str | None' = None) -> None
+
+class oox.resolve.ParagraphFormat()
+  .style: str | None  field
+  .align: str  field
+  .space_before: float  field
+  .space_after: float  field
+  .line_spacing: LineSpacing  field
+  .indent_left: float  field
+  .indent_right: float  field
+  .first_line: float  field
+  .keep_with_next: bool  field
+  .keep_together: bool  field
+  .page_break_before: bool  field
+  .widow_control: bool  field
+  .contextual_spacing: bool  field
+  .outline_level: int | None  field
+  .shading: str | None  field
+  .borders: Borders  field
+  .tabs: tuple[Tab, ...]  field
+  .numbering: tuple[int, int] | None  field
+  .__init__(self, style: 'str | None' = None, align: 'str' = 'left', space_before: 'float' = 0.0, space_after: 'float' = 0.0, line_spacing: 'LineSpacing' = LineSpacing(rule='auto', value=1.0), indent_left: 'float' = 0.0, indent_right: 'float' = 0.0, first_line: 'float' = 0.0, keep_with_next: 'bool' = False, keep_together: 'bool' = False, page_break_before: 'bool' = False, widow_control: 'bool' = False, contextual_spacing: 'bool' = False, outline_level: 'int | None' = None, shading: 'str | None' = None, borders: 'Borders' = <factory>, tabs: 'tuple[Tab, ...]' = (), numbering: 'tuple[int, int] | None' = None) -> None
+
+class oox.numbering.ListItem()
+  .paragraph: OoxElement  field
+  .label: str  field
+  .level: int  field
+  .num_id: int  field
+  .abstract_id: int  field
+  .format: str  field
+  .font: str | None  field
+  .suffix: str  field
+  .raw_label: str  field
+  .picture: OoxElement | None  field
+  .story: str  field
+  .__init__(self, paragraph: 'OoxElement', label: 'str', level: 'int', num_id: 'int', abstract_id: 'int', format: 'str', font: 'str | None', suffix: 'str', raw_label: 'str', picture: 'OoxElement | None' = None, story: 'str' = 'body') -> None
+  .is_bullet  property (read-only)
+
+class oox.document.ImageData(tuple)
+  .content_type  attribute
+  .data  attribute
+  .external  attribute
+  .partname  attribute
+
+class oox.opc.Relationships(MutableMapping)
+  .__init__(self, items: 'dict[str, Relationship] | None' = None) -> 'None'
+  .add(self, reltype: 'str', target: 'str', external: 'bool' = False) -> 'str'
+  .from_bytes(data: 'bytes', strict: 'bool' = False) -> 'Relationships'  classmethod
+  .of_type(self, reltype: 'str') -> 'list[Relationship]'
+  .to_bytes(self, strict: 'bool' = False) -> 'bytes'
+
+class oox.opc.Relationship()
+  .rid: str  field
+  .reltype: str  field
+  .target: str  field
+  .external: bool  field
+  .__init__(self, rid: 'str', reltype: 'str', target: 'str', external: 'bool' = False) -> None
+
+class oox.records.Record()
+  .__init__(self) -> None
+  .as_dict(self) -> 'dict[str, Any]'
+
+class oox.records.Hyperlink(Record)
+  .text: str | None  field
+  .target: str | None  field
+  .anchor: str | int | None  field
+  .tooltip: str | None  field
+  .kind: str  field
+  .cell: str | None  field
+  .shape: str | None  field
+  .__init__(self, text: 'str | None', target: 'str | None' = None, anchor: 'str | int | None' = None, tooltip: 'str | None' = None, kind: 'str' = 'url', cell: 'str | None' = None, shape: 'str | None' = None) -> None
+  .as_dict(self) -> 'dict[str, Any]'
+
+class oox.records.Comment(Record)
+  .text: str  field
+  .author: str | None  field
+  .date: str | None  field
+  .initials: str | None  field
+  .anchor_text: str | None  field
+  .cell: str | None  field
+  .id: int | None  field
+  .__init__(self, text: 'str', author: 'str | None' = None, date: 'str | None' = None, initials: 'str | None' = None, anchor_text: 'str | None' = None, cell: 'str | None' = None, id: 'int | None' = None) -> None
+  .as_dict(self) -> 'dict[str, Any]'
+
+class oox.records.Chart(Record)
+  .kind: str | None  field
+  .plot_kinds: list  field
+  .title: str | None  field
+  .legend: str | None  field
+  .x_title: str | None  field
+  .y_title: str | None  field
+  .y2_title: str | None  field
+  .number_format: str | None  field
+  .labels: list  field
+  .series: list  field
+  .categories: list | None  field
+  .anchor: str | None  field
+  .name: str | None  field
+  .rid: str | None  field
+  .__init__(self, kind: 'str | None', plot_kinds: 'list' = <factory>, title: 'str | None' = None, legend: 'str | None' = None, x_title: 'str | None' = None, y_title: 'str | None' = None, y2_title: 'str | None' = None, number_format: 'str | None' = None, labels: 'list' = <factory>, series: 'list' = <factory>, categories: 'list | None' = None, anchor: 'str | None' = None, name: 'str | None' = None, rid: 'str | None' = None) -> None
+  .as_dict(self) -> 'dict[str, Any]'
+
+class oox.records.CellFormat(Record)
+  .number_format: str | None  field
+  .bold: bool | None  field
+  .italic: bool | None  field
+  .underline: bool | None  field
+  .strike: bool | None  field
+  .size: float | None  field
+  .font: str | None  field
+  .color: str | None  field
+  .fill: str | None  field
+  .border: Any  field
+  .align: str | None  field
+  .valign: str | None  field
+  .wrap: bool | None  field
+  .__init__(self, number_format: 'str | None' = None, bold: 'bool | None' = None, italic: 'bool | None' = None, underline: 'bool | None' = None, strike: 'bool | None' = None, size: 'float | None' = None, font: 'str | None' = None, color: 'str | None' = None, fill: 'str | None' = None, border: 'Any' = None, align: 'str | None' = None, valign: 'str | None' = None, wrap: 'bool | None' = None) -> None
+  .as_dict(self) -> 'dict[str, Any]'
+
+class oox.records.Note(Record)
+  .id: int  field
+  .text: str  field
+  .__init__(self, id: 'int', text: 'str') -> None
+  .as_dict(self) -> 'dict[str, Any]'
+
+class oox.records.ContentControl(Record)
+  .tag: str | None  field
+  .title: str | None  field
+  .type: str | None  field
+  .placeholder: bool  field
+  .value: Any  field
+  .items: list | None  field
+  .date: Any  field
+  .__init__(self, tag: 'str | None', title: 'str | None' = None, type: 'str | None' = None, placeholder: 'bool' = False, value: 'Any' = None, items: 'list | None' = None, date: 'Any' = None) -> None
+  .as_dict(self) -> 'dict[str, Any]'
+
+class oox.records.Picture(Record)
+  .kind: str  field
+  .name: str | None  field
+  .descr: str | None  field
+  .width: float | None  field
+  .height: float | None  field
+  .floating: bool  field
+  .wrap: str | None  field
+  .embed: str | None  field
+  .link: str | None  field
+  .svg: str | None  field
+  .element: OoxElement | None  field
+  .__init__(self, kind: 'str', name: 'str | None' = None, descr: 'str | None' = None, width: 'float | None' = None, height: 'float | None' = None, floating: 'bool' = False, wrap: 'str | None' = None, embed: 'str | None' = None, link: 'str | None' = None, svg: 'str | None' = None, element: 'OoxElement | None' = None) -> None
+  .as_dict(self) -> 'dict[str, Any]'
+
+class oox.records.Protection(Record)
+  .edit: str | None  field
+  .enforced: bool  field
+  .password: bool  field
+  .algorithm: str | None  field
+  .formatting: bool  field
+  .__init__(self, edit: 'str | None', enforced: 'bool' = False, password: 'bool' = False, algorithm: 'str | None' = None, formatting: 'bool' = False) -> None
+  .as_dict(self) -> 'dict[str, Any]'
+
+class oox.records.Revision(Record)
+  .kind: str  field
+  .author: str | None  field
+  .date: str | None  field
+  .text: str  field
+  .__init__(self, kind: 'str', author: 'str | None' = None, date: 'str | None' = None, text: 'str' = '') -> None
+  .as_dict(self) -> 'dict[str, Any]'
+
+class oox.records.TextBox(Record)
+  .text: str  field
+  .paragraphs: int  field
+  .vml_only: bool  field
+  .name: str | None  field
+  .__init__(self, text: 'str', paragraphs: 'int' = 0, vml_only: 'bool' = False, name: 'str | None' = None) -> None
+  .as_dict(self) -> 'dict[str, Any]'
+
+class oox.records.ConditionalFormat(Record)
+  .ref: str  field
+  .rule: str | None  field
+  .type: str | None  field
+  .priority: int  field
+  .operator: str | None  field
+  .value: Any  field
+  .values: list | None  field
+  .formula: str | None  field
+  .formulas: list  field
+  .colors: list | None  field
+  .color: str | None  field
+  .icons: str | None  field
+  .n: int | None  field
+  .percent: bool | None  field
+  .text: str | None  field
+  .how: str | None  field
+  .stop: bool  field
+  .style: CellFormat | None  field
+  .__init__(self, ref: 'str', rule: 'str | None', type: 'str | None' = None, priority: 'int' = 0, operator: 'str | None' = None, value: 'Any' = None, values: 'list | None' = None, formula: 'str | None' = None, formulas: 'list' = <factory>, colors: 'list | None' = None, color: 'str | None' = None, icons: 'str | None' = None, n: 'int | None' = None, percent: 'bool | None' = None, text: 'str | None' = None, how: 'str | None' = None, stop: 'bool' = False, style: 'CellFormat | None' = None) -> None
+  .as_dict(self) -> 'dict[str, Any]'
+
+class oox.records.Validation(Record)
+  .ref: str  field
+  .type: str  field
+  .values: list | None  field
+  .source: str | None  field
+  .whole: tuple | None  field
+  .decimal: tuple | None  field
+  .allow_blank: bool  field
+  .prompt: str | None  field
+  .error: str | None  field
+  .__init__(self, ref: 'str', type: 'str', values: 'list | None' = None, source: 'str | None' = None, whole: 'tuple | None' = None, decimal: 'tuple | None' = None, allow_blank: 'bool' = True, prompt: 'str | None' = None, error: 'str | None' = None) -> None
+  .as_dict(self) -> 'dict[str, Any]'
+
+class oox.records.ExcelTable(Record)
+  .name: str | None  field
+  .ref: str  field
+  .columns: list  field
+  .style: str | None  field
+  .stripes: bool  field
+  .first_column: bool  field
+  .last_column: bool  field
+  .header: bool  field
+  .totals_row: bool  field
+  .__init__(self, name: 'str | None', ref: 'str', columns: 'list' = <factory>, style: 'str | None' = None, stripes: 'bool' = True, first_column: 'bool' = False, last_column: 'bool' = False, header: 'bool' = True, totals_row: 'bool' = False) -> None
+  .as_dict(self) -> 'dict[str, Any]'
+
+class oox.records.PageSetup(Record)
+  .orientation: str | None  field
+  .paper: Any  field
+  .fit_width: int | None  field
+  .fit_height: int | None  field
+  .scale: int | None  field
+  .margins: dict | None  field
+  .print_area: str | None  field
+  .repeat_rows: str | None  field
+  .repeat_cols: str | None  field
+  .header: Any  field
+  .footer: Any  field
+  .gridlines: bool | None  field
+  .center_horizontally: bool | None  field
+  .center_vertically: bool | None  field
+  .__init__(self, orientation: 'str | None' = None, paper: 'Any' = None, fit_width: 'int | None' = None, fit_height: 'int | None' = None, scale: 'int | None' = None, margins: 'dict | None' = None, print_area: 'str | None' = None, repeat_rows: 'str | None' = None, repeat_cols: 'str | None' = None, header: 'Any' = None, footer: 'Any' = None, gridlines: 'bool | None' = None, center_horizontally: 'bool | None' = None, center_vertically: 'bool | None' = None) -> None
+  .as_dict(self) -> 'dict[str, Any]'
+
+class oox.records.SheetOptions(Record)
+  .tab_color: str | None  field
+  .hidden: bool | str  field
+  .zoom: int  field
+  .gridlines: bool  field
+  .protected: bool  field
+  .__init__(self, tab_color: 'str | None' = None, hidden: 'bool | str' = False, zoom: 'int' = 100, gridlines: 'bool' = True, protected: 'bool' = False) -> None
+  .as_dict(self) -> 'dict[str, Any]'
+
+class oox.records.WorkbookProtection(Record)
+  .structure: bool  field
+  .windows: bool  field
+  .password: bool  field
+  .__init__(self, structure: 'bool' = False, windows: 'bool' = False, password: 'bool' = False) -> None
+  .as_dict(self) -> 'dict[str, Any]'
+
+class oox.records.Placeholder(Record)
+  .type: str  field
+  .idx: int  field
+  .name: str | None  field
+  .element: OoxElement | None  field
+  .__init__(self, type: 'str', idx: 'int', name: 'str | None' = None, element: 'OoxElement | None' = None) -> None
+  .as_dict(self) -> 'dict[str, Any]'
+
+class oox.records.Shape(Record)
+  .kind: str  field
+  .name: str | None  field
+  .text: str | None  field
+  .placeholder: Placeholder | None  field
+  .geometry: str | None  field
+  .x: float | None  field
+  .y: float | None  field
+  .width: float | None  field
+  .height: float | None  field
+  .element: OoxElement | None  field
+  .__init__(self, kind: 'str', name: 'str | None' = None, text: 'str | None' = None, placeholder: 'Placeholder | None' = None, geometry: 'str | None' = None, x: 'float | None' = None, y: 'float | None' = None, width: 'float | None' = None, height: 'float | None' = None, element: 'OoxElement | None' = None) -> None
+  .as_dict(self) -> 'dict[str, Any]'
+
+class oox.records.SlideTableInfo(Record)
+  .name: str | None  field
+  .rows: list  field
+  .merges: list  field
+  .style: str | None  field
+  .style_name: str | None  field
+  .header: bool  field
+  .banded: bool  field
+  .first_column: bool  field
+  .__init__(self, name: 'str | None', rows: 'list' = <factory>, merges: 'list' = <factory>, style: 'str | None' = None, style_name: 'str | None' = None, header: 'bool' = False, banded: 'bool' = False, first_column: 'bool' = False) -> None
+  .as_dict(self) -> 'dict[str, Any]'
+
+class oox.records.SlideSection(Record)
+  .name: str  field
+  .slides: list  field
+  .__init__(self, name: 'str', slides: 'list' = <factory>) -> None
+  .as_dict(self) -> 'dict[str, Any]'
+
 module oox.units
-  Cm(value: 'float') -> 'int'
-  Emu(value: 'float') -> 'int'
-  Inches(value: 'float') -> 'int'
-  Mm(value: 'float') -> 'int'
-  Pt(value: 'float') -> 'int'
-  Px(value: 'float', dpi: 'float' = 96) -> 'int'
+  Cm(value: 'float') -> 'Length'
+  Emu(value: 'float') -> 'Length'
+  Inches(value: 'float') -> 'Length'
+  class Length(int)
+  Mm(value: 'float') -> 'Length'
+  Pt(value: 'float') -> 'Length'
+  Px(value: 'float', dpi: 'float' = 96) -> 'Length'
+  emu(value: 'float', name: 'str' = 'length', limit: 'float | None' = None) -> 'int'
+  points(emu_value: 'float') -> 'float'
   to_twips(emu: 'int') -> 'int'
+  twips(value: 'float', name: 'str' = 'length', limit: 'float | None' = None) -> 'int'
+  twips_to_points(value: 'float') -> 'float'
 
 module oox.teletype
   addTextToElement(element, s: 'str') -> 'None'
@@ -469,4 +855,18 @@ module oox.spreadsheet
 module oox.charts
   PALETTE  constant
   build_chart(kind: 'str', categories: 'Sequence', series: 'Iterable[Series]', *, categories_ref: 'str | None' = None, grouping: 'str | None' = None, title: 'str | None' = None, x_title: 'str | None' = None, y_title: 'str | None' = None, legend: 'str | None' = 'right', labels=None, label_format: 'str | None' = None, colors: 'Sequence[str] | None' = None, number_format: 'str | None' = None, markers: 'bool' = True, lines: 'bool | None' = None, smooth: 'bool' = False, gridlines: 'bool' = True, y_min: 'float | None' = None, y_max: 'float | None' = None, hole_size: 'int' = 50, gap_width: 'int' = 150, first_slice: 'int' = 0, kinds: 'Mapping[str | int, str] | None' = None, secondary: 'Iterable[str | int]' = (), y2_title: 'str | None' = None, y2_min: 'float | None' = None, y2_max: 'float | None' = None, y2_number_format: 'str | None' = None, external_rid: 'str | None' = None) -> 'OoxElement'
-  chart_info(space: 'OoxElement') -> 'dict'
+  chart_info(space: 'OoxElement')
+
+module oox.ns
+  A  constant
+  C  constant
+  MC  constant
+  O  constant
+  P  constant
+  PIC  constant
+  R  constant
+  V  constant
+  W  constant
+  WP  constant
+  X  constant
+  qn(name: 'str') -> 'str'

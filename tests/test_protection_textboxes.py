@@ -10,6 +10,7 @@ import pytest
 from oox import SpreadsheetDocument, WordprocessingDocument, open_document
 from oox.grammar import URI
 from oox.protection import agile_password_hash, word_legacy_key, word_password_hash
+from oox.records import Protection, TextBox, WorkbookProtection
 from oox.units import Cm
 
 SALT = bytes(range(16))
@@ -51,8 +52,8 @@ def test_protect_round_trip(edit):
     doc = WordprocessingDocument.new()
     doc.protect(edit, password="secret", salt=SALT, spin_count=1000)
     back = _reopen(doc)
-    assert back.protection() == {"edit": edit, "enforced": True, "password": True,
-                                 "algorithm": "SHA-1", "formatting": False}
+    assert back.protection() == Protection(edit=edit, enforced=True, password=True,
+                                           algorithm="SHA-1", formatting=False)
     assert back.check_protection_password("secret")
     assert not back.check_protection_password("Secret")
     assert back.validate(target="Office2007") == {}
@@ -78,12 +79,12 @@ def test_protect_writes_word_2007_attributes():
 def test_protect_sha512_and_no_password_and_replace():
     doc = WordprocessingDocument.new()
     doc.protect("comments")
-    assert doc.protection()["password"] is False
+    assert doc.protection().password is False
     assert doc.check_protection_password("")
     doc.protect("trackedChanges", password="pw", algorithm="SHA-512", salt=SALT, spin_count=10)
     assert len(doc.settings.findall(f"{{{URI['w']}}}documentProtection")) == 1
     info = doc.protection()
-    assert info["edit"] == "trackedChanges" and info["algorithm"] == "SHA-512"
+    assert info.edit == "trackedChanges" and info.algorithm == "SHA-512"
     assert doc.check_protection_password("pw") and not doc.check_protection_password("p")
 
 
@@ -99,7 +100,7 @@ def test_check_password_reads_word_2010_attributes():
                  "hashValue": word_password_hash("johnjohn", salt, "SHA-512")}.items():
         el.set(f"{{{URI['w']}}}{k}", v)
     doc.settings.add(el, replace=True)
-    assert doc.protection()["algorithm"] == "SHA-512"
+    assert doc.protection().algorithm == "SHA-512"
     assert doc.check_protection_password("johnjohn")
     assert not doc.check_protection_password("john")
 
@@ -122,7 +123,7 @@ def test_workbook_protection_round_trip():
     assert book.workbook_protection() is None
     book.protect_workbook(password="secret")
     back = _reopen(book)
-    assert back.workbook_protection() == {"structure": True, "windows": False, "password": True}
+    assert back.workbook_protection() == WorkbookProtection(structure=True, password=True)
     assert back.check_workbook_password("secret") and not back.check_workbook_password("x")
     assert back.validate(target="Office2007") == {}
     # x:workbookProtection sits after x:bookViews' predecessors, before x:sheets
@@ -135,8 +136,7 @@ def test_workbook_protection_round_trip():
 def test_workbook_protection_windows_without_password():
     book = SpreadsheetDocument.new()
     book.protect_workbook(structure=False, windows=True)
-    assert book.workbook_protection() == {"structure": False, "windows": True,
-                                          "password": False}
+    assert book.workbook_protection() == WorkbookProtection(windows=True)
     assert book.check_workbook_password("anything")
 
 
@@ -148,7 +148,7 @@ def test_check_workbook_password_reads_excel_2010_attributes():
     el.set("workbookSpinCount", "1000")
     el.set("workbookSaltValue", base64.b64encode(SALT).decode())
     el.set("workbookHashValue", agile_password_hash("secret", SALT, "SHA-512", 1000))
-    assert book.workbook_protection()["password"]
+    assert book.workbook_protection().password
     assert book.check_workbook_password("secret") and not book.check_workbook_password("x")
 
 
@@ -165,7 +165,7 @@ def test_text_box_has_drawingml_and_vml_copies():
     assert ac.find(f"{{{MC}}}Choice").get("Requires") == "wps"
     assert ac.find(f".//{{{MC}}}Fallback/{{{W}}}pict/{{{V}}}shape") is not None
     assert len(list(ac.iter(f"{{{W}}}txbxContent"))) == 2
-    assert doc.text_boxes() == [{"text": "Note\nSecond", "paragraphs": 2, "vml_only": False}]
+    assert doc.text_boxes() == [TextBox("Note\nSecond", paragraphs=2)]
     for level in (None, "full"):
         kwargs = {"level": level} if level else {}
         assert doc.validate(**kwargs) == {}
@@ -178,9 +178,9 @@ def test_text_boxes_round_trip_and_edit_both_copies():
     doc.add_text_box("Two", h_relative="page", v_relative="page", wrap="topAndBottom",
                      fill=None, line=None)
     back = _reopen(doc)
-    assert [b["text"] for b in back.text_boxes()] == ["One", "Two"]
+    assert [b.text for b in back.text_boxes()] == ["One", "Two"]
     back.set_text_box_text(1, "Changed\nTwice")
-    assert [b["text"] for b in back.text_boxes()] == ["One", "Changed\nTwice"]
+    assert [b.text for b in back.text_boxes()] == ["One", "Changed\nTwice"]
     from oox import teletype
 
     copies = list(back.body.iter(f"{{{W}}}txbxContent"))[2:]
@@ -210,7 +210,7 @@ def test_text_box_with_table_content_and_existing_paragraph():
     run = doc.add_text_box([w.P(w.R(w.T("Above the table"))), tbl, w.P()], paragraph=p)
     assert run.getparent() is p
     assert len(list(doc.document.iter(f"{{{W}}}tbl"))) == 2  # one per copy
-    assert doc.text_boxes()[0]["paragraphs"] == 2
+    assert doc.text_boxes()[0].paragraphs == 2
     assert doc.validate() == {}
 
 
@@ -220,7 +220,7 @@ def test_vml_only_text_boxes_are_read():
     for ac in list(doc.document.iter(f"{{{MC}}}AlternateContent")):
         ac.addprevious(ac.find(f"{{{MC}}}Fallback")[0])
         ac.getparent().remove(ac)
-    assert doc.text_boxes() == [{"text": "Legacy", "paragraphs": 1, "vml_only": True}]
+    assert doc.text_boxes() == [TextBox("Legacy", paragraphs=1, vml_only=True)]
 
 
 def test_text_box_rejects_bad_options():

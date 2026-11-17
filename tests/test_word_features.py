@@ -10,6 +10,8 @@ import pytest
 from oox import WordprocessingDocument, open_document, teletype
 from oox.fields import field_codes
 from oox.ns import w
+from oox.records import Hyperlink, Note
+from oox.units import Inches
 
 
 def reopen(doc):
@@ -24,18 +26,18 @@ def test_new_document_has_one_a4_portrait_section():
     doc = WordprocessingDocument.new()
     (sec,) = doc.sections
     assert sec.orientation == "portrait"
-    assert (sec.page_width, sec.page_height) == (11906, 16838)
-    assert sec.text_width == 11906 - 2 * 1440
+    assert (sec.page_width, sec.page_height) == (595.3, 841.9)          # A4 in points
+    assert sec.text_width == pytest.approx(595.3 - 2 * 72)
 
 
 def test_orientation_swaps_size_and_round_trips():
     doc = WordprocessingDocument.new()
     sec = doc.sections[0]
     sec.orientation = "landscape"
-    assert (sec.page_width, sec.page_height) == (16838, 11906)
+    assert (sec.page_width, sec.page_height) == (841.9, 595.3)
     assert reopen(doc).sections[0].orientation == "landscape"
     sec.orientation = "portrait"
-    assert sec.page_width == 11906 and sec.sect_pr.first("w:pgSz").get(
+    assert sec.page_width == 595.3 and sec.sect_pr.first("w:pgSz").get(
         "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}orient") is None
     with pytest.raises(ValueError):
         sec.orientation = "sideways"
@@ -113,7 +115,7 @@ def test_shared_header_part_is_split_on_write():
     import copy
 
     doc.sections[1].sect_pr.add(copy.deepcopy(ref))
-    assert teletype.extractText(doc.sections[1].header(create=False)) == "one"
+    assert teletype.extractText(doc.sections[1].header()) == "one"
     doc.sections[1].header_text("two")
     assert teletype.extractText(doc.sections[0].header()) == "one"
     assert teletype.extractText(doc.sections[1].header()) == "two"
@@ -122,23 +124,35 @@ def test_shared_header_part_is_split_on_write():
 def test_section_page_size_and_margins():
     doc = WordprocessingDocument.new()
     sec = doc.add_section(page="Letter", start="oddPage")
-    assert (sec.page_width, sec.page_height) == (12240, 15840)
+    assert (sec.page_width, sec.page_height) == (612, 792)
     assert sec.start == "oddPage"
-    sec.set_margins(left=720, right=720)
-    assert sec.margins["left"] == 720 and sec.text_width == 12240 - 1440
+    sec.set_margins(left=36, right=36)
+    assert sec.margins["left"] == 36 and sec.text_width == 612 - 72
+    assert sec.sect_pr.first("w:pgMar").get(
+        "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}left") == "720"
+    with pytest.raises(ValueError, match="no room"):
+        sec.set_margins(left=720)            # twips from old code: 10 inches
+    sec.set_page_size(Inches(11), Inches(8.5))
+    assert (sec.page_width, sec.orientation) == (792, "landscape")
+    with pytest.raises(ValueError, match="Emu"):
+        sec.set_margins(left=914400)
+    with pytest.raises(TypeError):
+        sec.set_margins(inside=10)
 
 
 # -- links and bookmarks ---------------------------------------------------------------------
 def test_hyperlinks_and_bookmarks_round_trip():
     doc = WordprocessingDocument.new()
     p = doc.add_paragraph("See ")
-    doc.add_hyperlink(p, "Ecma", url="https://ecma-international.org/", tooltip="tip")
+    doc.add_hyperlink(p, "Ecma", target="https://ecma-international.org/", tooltip="tip")
     doc.add_hyperlink(p, "below", anchor="target")
     doc.add_bookmark("target", doc.add_heading("Target", 1))
     back = reopen(doc)
-    assert back.hyperlinks() == [("Ecma", "https://ecma-international.org/"), ("below", "#target")]
+    assert back.hyperlinks() == [
+        Hyperlink("Ecma", target="https://ecma-international.org/", tooltip="tip"),
+        Hyperlink("below", anchor="target", kind="bookmark")]
     assert back.bookmarks() == ["target"]
-    rels = list(back.main_part.rels.items.values())
+    rels = list(back.main_part.rels.values())
     assert any(r.target == "https://ecma-international.org/" and r.external for r in rels)
     assert not doc.validate()
 
@@ -159,7 +173,7 @@ def test_duplicate_bookmark_and_link_arguments():
     with pytest.raises(ValueError):
         doc.add_hyperlink(p, "t")
     with pytest.raises(ValueError):
-        doc.add_hyperlink(p, "t", url="u", anchor="a")
+        doc.add_hyperlink(p, "t", target="u", anchor="a")
 
 
 # -- notes and comments ------------------------------------------------------------------------
@@ -170,8 +184,8 @@ def test_footnotes_endnotes_numbering_and_separators():
     doc.add_footnote(p, "two")
     doc.add_endnote(p, "end")
     back = reopen(doc)
-    assert back.footnotes() == [(1, "one"), (2, "two")]
-    assert back.endnotes() == [(1, "end")]
+    assert back.footnotes() == [Note(1, "one"), Note(2, "two")]
+    assert back.endnotes() == [Note(1, "end")]
     fn_root = back.related_parts(back.main_part, "FootnotesPart")[0].element
     types = [n.get("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}type")
              for n in fn_root]
@@ -192,9 +206,10 @@ def test_comments_round_trip():
     doc.add_comment(p, "Check this.", author="Ada Lovelace", date=dt.datetime(2026, 11, 14, 9, 30))
     doc.add_comment(doc.add_paragraph("Another."), "Second.")
     (first, second) = reopen(doc).comments()
-    assert first == {"id": 0, "author": "Ada Lovelace", "text": "Check this.",
-                     "anchor": "Commented sentence."}
-    assert second["id"] == 1 and second["author"] == "oox"
+    assert (first.id, first.author, first.text, first.anchor_text) == (
+        0, "Ada Lovelace", "Check this.", "Commented sentence.")
+    assert first.date.startswith("2026-11-14T09:30")
+    assert second.id == 1 and second.author == "oox"
     c = doc.related_parts(doc.main_part, "WordprocessingCommentsPart")[0].element.first("w:comment")
     W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
     assert c.get(W + "initials") == "AL" and c.get(W + "date") == "2026-11-14T09:30:00Z"
@@ -268,8 +283,8 @@ def test_replace_reaches_headers_footers_notes_comments():
     doc.add_comment(p, "C {{x}}")
     assert doc.replace_text({"{{x}}": "ok", "{{missing}}": "-"}) == {"{{x}}": 5, "{{missing}}": 0}
     assert teletype.extractText(doc.sections[0].header()) == "H ok"
-    assert doc.footnotes() == [(1, "N ok")]
-    assert doc.comments()[0]["text"].endswith("C ok")
+    assert doc.footnotes() == [Note(1, "N ok")]
+    assert doc.comments()[0].text.endswith("C ok")
 
 
 def test_replace_text_needs_new():
@@ -290,19 +305,19 @@ def test_section_objects_stay_with_their_section_after_add_section():
     doc = WordprocessingDocument.new()
     doc.add_paragraph("cover")
     first = doc.sections[0]
-    first.set_margins(left=1800, right=1800)
+    first.set_margins(left=90, right=90)
     wide = doc.add_section(landscape=True)
     assert first.orientation == "portrait" and wide.orientation == "landscape"
-    assert first.text_width == doc.sections[0].text_width == 11906 - 3600
+    assert first.text_width == doc.sections[0].text_width == pytest.approx(595.3 - 180)
     assert wide.text_width == doc.sections[1].text_width
     first.footer_text("still the cover section's footer")
     assert doc.sections[0].shown("footer") is not None
 
 
-def test_section_margins_accept_emu_like_tables():
+def test_section_margins_take_points_or_lengths():
     from oox.units import Cm
 
     doc = WordprocessingDocument.new()
     section = doc.sections[0]
-    section.set_margins(left=Cm(2), right=1440)
-    assert section.margins["left"] == 1134 and section.margins["right"] == 1440
+    section.set_margins(left=Cm(2), right=72)
+    assert section.margins["left"] == 56.7 and section.margins["right"] == 72

@@ -85,8 +85,10 @@ def toc(doc, levels: tuple[int, int] = (1, 3), title: str | None = "Contents",
     from .ns import w as _w
 
     lo, hi = levels
+    from .walk import iter_story
+
     headings = []
-    for p in doc.body.iter(f"{{{_W}}}p"):
+    for p in iter_story(doc.body, f"{{{_W}}}p", text_boxes=False):  # Word leaves text boxes out
         lvl = doc.outline_level(p)
         if lo <= lvl <= hi:
             from . import teletype
@@ -113,7 +115,7 @@ def toc(doc, levels: tuple[int, int] = (1, 3), title: str | None = "Contents",
             p.add(_w.R(_w.FldChar(fldCharType="end")))
         out.append(p)
     if update_on_open:
-        doc.settings.add(_w.UpdateFields(), replace=True)
+        doc.ensure_settings().add(_w.UpdateFields(), replace=True)
     return out
 
 
@@ -123,8 +125,10 @@ _W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 def field_codes(root: OoxElement) -> list[str]:
     """Field names used under ``root`` (``["PAGE", "NUMPAGES"]``), in order;
     simple and complex fields alike."""
+    from .walk import iter_story
+
     out = []
-    for el in root.iter(f"{{{_W}}}fldSimple", f"{{{_W}}}instrText"):
+    for el in iter_story(root, f"{{{_W}}}fldSimple", f"{{{_W}}}instrText"):
         code = el.get(f"{{{_W}}}instr") if el.tag.endswith("fldSimple") else el.text
         words = (code or "").split()
         if words:

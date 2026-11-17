@@ -1,51 +1,121 @@
-"""Character and paragraph formatting, custom styles, effective formatting.
+"""Character and paragraph formatting, custom styles, and the value types
+shared with the formatting resolver (``oox.resolve``).
 
     p = doc.add_paragraph()
     doc.add_run(p, "Warning: ", bold=True, color="C00000")
     doc.add_run(p, "check the figures.", italic=True, size=12, font="Georgia")
-    doc.format_paragraph(p, align="center", space_after=12, first_line=Cm(1))
+    doc.format_paragraph(p, align="center", space_after=12, first_line=Cm(1),
+                         line_spacing=LineSpacing.exactly(14))
 
     doc.add_style("Note", base="Normal", italic=True, color="595959", space_before=6)
     doc.add_paragraph("A note.", style="Note")
 
-    doc.effective_format(p, run)   # {"bold": True, "size": 12.0, "font": "Georgia", ...}
+    fmt = doc.formatting()           # reads what Word shows; see oox.resolve
+    fmt.paragraph(p).line_spacing    # LineSpacing(rule='exact', value=14.0)
+    fmt.run(r).bold
 
-Units: font size and paragraph spacing in points (as in Word's UI); indents
-in EMU from ``oox.units`` (``Cm(1)``) or twips (values up to 100000 are taken
-as twips); line spacing as a multiple (1.15, 1.5, 2) or ``"12pt"`` exactly.
-
-``effective_format`` resolves what Word shows: document defaults, then the
-paragraph style chain (``basedOn``), the character style chain, then direct
-formatting; theme fonts are looked up in the theme.  Table styles and
-numbering formatting are not applied.
+Units are points throughout, as in Word's UI: font size, paragraph spacing,
+indents, letter spacing, tab positions, border widths.  A ``Length`` from
+``oox.units`` (``Cm(1)``, ``Inches(0.5)``) is accepted wherever points are.
+Line spacing is a multiple (``1.15``) or a ``LineSpacing``.  The resolver
+reports values in the same forms the writers take.
 """
 
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Any
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 from .element import OoxElement
 from .grammar import URI
 from .ns import w
+from .units import PAGE_LIMIT, twips
 
 if TYPE_CHECKING:
     from .document import WordprocessingDocument
 
 W = URI["w"]
-A = URI["a"]
 _ALIGN = {"left": "left", "center": "center", "right": "right", "justify": "both"}
 _ALIGN_BACK = {"left": "left", "start": "left", "center": "center", "right": "right",
                "end": "right", "both": "justify", "distribute": "justify"}
-RUN_OPTIONS = ("bold", "italic", "underline", "strike", "size", "font", "color", "highlight",
-               "superscript", "subscript", "caps", "small_caps")
+RUN_OPTIONS = ("bold", "italic", "underline", "strike", "double_strike", "size", "font",
+               "color", "highlight", "superscript", "subscript", "caps", "small_caps",
+               "shading", "letter_spacing", "hidden", "language", "border")
 PARAGRAPH_OPTIONS = ("align", "space_before", "space_after", "line_spacing", "indent_left",
                      "indent_right", "first_line", "keep_with_next", "keep_together",
-                     "page_break_before")
+                     "page_break_before", "widow_control", "contextual_spacing",
+                     "outline_level", "shading", "borders", "tabs")
+BORDER_SIDES = ("top", "left", "bottom", "right", "between", "bar")
+_LINE_RULES = {"auto": "auto", "exact": "exact", "at_least": "atLeast"}
 
 
-def _twips(value: float) -> int:
-    return round(value / 635) if abs(value) > 100000 else int(value)
+# -- value types -------------------------------------------------------------------------------
+class LineSpacing(NamedTuple):
+    """Line spacing as Word stores it.  ``rule`` is "auto" (``value`` is a
+    multiple of single spacing), "exact" or "at_least" (``value`` in points).
+
+        LineSpacing.multiple(1.15)   LineSpacing.exactly(12)   LineSpacing.at_least(14)
+    """
+
+    rule: str
+    value: float
+
+    @classmethod
+    def multiple(cls, n: float) -> LineSpacing:
+        """``n`` times single spacing (1.15, 1.5, 2)."""
+        return cls("auto", float(n))
+
+    @classmethod
+    def exactly(cls, points: float) -> LineSpacing:
+        """Exactly ``points`` per line."""
+        return cls("exact", float(points))
+
+    @classmethod
+    def at_least(cls, points: float) -> LineSpacing:
+        """At least ``points`` per line (more for larger text)."""
+        return cls("at_least", float(points))
+
+
+class Border(NamedTuple):
+    """One border line: ``style`` ("single", "double", "dotted", ...), ``width``
+    and ``space`` (gap to the text) in points, ``color`` as hex or None (auto)."""
+
+    style: str = "single"
+    width: float = 0.5
+    color: str | None = None
+    space: float = 0.0
+
+
+class Tab(NamedTuple):
+    """A tab stop: ``position`` in points from the left indent's origin,
+    ``align`` ("left", "center", "right", "decimal", "bar"), ``leader``
+    ("none", "dot", "hyphen", "underscore", "heavy", "middleDot")."""
+
+    position: float
+    align: str = "left"
+    leader: str = "none"
+
+
+@dataclass(frozen=True)
+class Borders:
+    """Paragraph borders; each side is a ``Border`` or None."""
+
+    top: Border | None = None
+    left: Border | None = None
+    bottom: Border | None = None
+    right: Border | None = None
+    between: Border | None = None
+    bar: Border | None = None
+
+    def __bool__(self) -> bool:
+        return any(getattr(self, side) is not None for side in BORDER_SIDES)
+
+
+# -- helpers -----------------------------------------------------------------------------------
+def to_twips(value: float) -> int:
+    """Points (or a ``Length``) to twips."""
+    return twips(value, limit=PAGE_LIMIT)
 
 
 def _val(el: OoxElement | None, attr: str = "val") -> str | None:
@@ -59,6 +129,17 @@ def _on(el: OoxElement | None) -> bool | None:
     return _val(el) not in ("0", "false", "off")
 
 
+def _hex(color: str) -> str:
+    return color.lstrip("#").upper()
+
+
+def _border_element(factory, border: Border) -> OoxElement:
+    attrs: dict[str, Any] = {"val": border.style, "sz": round(border.width * 8),
+                             "space": round(border.space),
+                             "color": _hex(border.color) if border.color else "auto"}
+    return factory(**attrs)
+
+
 # -- building ----------------------------------------------------------------------------------
 def apply_run_format(rpr: OoxElement, **fmt: Any) -> OoxElement:
     """Set run properties on a ``w:rPr`` (None leaves a property alone)."""
@@ -66,7 +147,8 @@ def apply_run_format(rpr: OoxElement, **fmt: Any) -> OoxElement:
     if unknown:
         raise TypeError(f"unknown run format {sorted(unknown)}; known: {', '.join(RUN_OPTIONS)}")
     toggles = {"bold": (w.B, w.BCs), "italic": (w.I, w.ICs), "strike": (w.Strike, None),
-               "caps": (w.Caps, None), "small_caps": (w.SmallCaps, None)}
+               "double_strike": (w.Dstrike, None), "caps": (w.Caps, None),
+               "small_caps": (w.SmallCaps, None), "hidden": (w.Vanish, None)}
     for name, (factory, cs) in toggles.items():
         value = fmt.get(name)
         if value is None:
@@ -85,20 +167,31 @@ def apply_run_format(rpr: OoxElement, **fmt: Any) -> OoxElement:
         f = fmt["font"]
         rpr.add(w.RFonts(ascii=f, hAnsi=f, cs=f, eastAsia=f), replace=True)
     if fmt.get("color") is not None:
-        rpr.add(w.Color(val=fmt["color"].lstrip("#").upper()), replace=True)
+        rpr.add(w.Color(val=_hex(fmt["color"])), replace=True)
     if fmt.get("highlight") is not None:
         rpr.add(w.Highlight(val=fmt["highlight"]), replace=True)
-    if fmt.get("superscript") or fmt.get("subscript"):
-        rpr.add(w.VertAlign(val="superscript" if fmt.get("superscript") else "subscript"),
-                replace=True)
+    if fmt.get("superscript") is not None or fmt.get("subscript") is not None:
+        pos = ("superscript" if fmt.get("superscript")
+               else "subscript" if fmt.get("subscript") else "baseline")
+        rpr.add(w.VertAlign(val=pos), replace=True)
+    if fmt.get("shading") is not None:
+        rpr.add(w.Shd(val="clear", color="auto", fill=_hex(fmt["shading"])), replace=True)
+    if fmt.get("letter_spacing") is not None:
+        rpr.add(w.Spacing(val=to_twips(fmt["letter_spacing"])), replace=True)
+    if fmt.get("language") is not None:
+        rpr.add(w.Lang(val=fmt["language"]), replace=True)
+    if fmt.get("border") is not None:
+        rpr.add(_border_element(w.Bdr, fmt["border"]), replace=True)
     return rpr
 
 
 def run(text: str, *, style: str | None = None, **fmt: Any) -> OoxElement:
     """A ``w:r`` with ``text`` (tabs and line breaks converted) and formatting:
     bold, italic, underline (True or a Word style such as "double"), strike,
-    size (pt), font, color (hex), highlight ("yellow" ...), superscript,
-    subscript, caps, small_caps; ``style`` is a character style id."""
+    double_strike, size (pt), font, color (hex), highlight ("yellow" ...),
+    superscript, subscript, caps, small_caps, shading (hex fill),
+    letter_spacing (pt), hidden, language ("en-US"), border (``Border``);
+    ``style`` is a character style id."""
     from . import teletype
 
     rpr = w.RPr()
@@ -110,42 +203,88 @@ def run(text: str, *, style: str | None = None, **fmt: Any) -> OoxElement:
     return r
 
 
+def _line_attrs(ls: Any) -> tuple[int, str]:
+    if isinstance(ls, LineSpacing):
+        if ls.rule not in _LINE_RULES:
+            raise ValueError(f"LineSpacing rule is one of {', '.join(_LINE_RULES)}")
+        if ls.rule == "auto":
+            return round(ls.value * 240), "auto"
+        return to_twips(ls.value), _LINE_RULES[ls.rule]
+    if isinstance(ls, (int, float)) and not isinstance(ls, bool):
+        return round(float(ls) * 240), "auto"
+    raise TypeError("line_spacing is a multiple (1.15) or a LineSpacing "
+                    "(LineSpacing.exactly(12), LineSpacing.at_least(12))")
+
+
 def apply_paragraph_format(ppr: OoxElement, **fmt: Any) -> OoxElement:
     unknown = set(fmt) - set(PARAGRAPH_OPTIONS)
     if unknown:
         raise TypeError(f"unknown paragraph format {sorted(unknown)}; "
                         f"known: {', '.join(PARAGRAPH_OPTIONS)}")
-    if fmt.get("align") is not None:
+    given = {k for k, v in fmt.items() if v is not None}
+    if "align" in given:
         ppr.add(w.Jc(val=_ALIGN[fmt["align"]]), replace=True)
     for name, factory in (("keep_with_next", w.KeepNext), ("keep_together", w.KeepLines),
-                          ("page_break_before", w.PageBreakBefore)):
-        if fmt.get(name) is not None:
+                          ("page_break_before", w.PageBreakBefore),
+                          ("widow_control", w.WidowControl),
+                          ("contextual_spacing", w.ContextualSpacing)):
+        if name in given:
             ppr.add(factory() if fmt[name] else factory(val=False), replace=True)
-    spacing = ppr.first("w:spacing")
-    sp: dict[str, Any] = dict(spacing.attrib) if spacing is not None else {}
-    sp = {k.rpartition("}")[2]: v for k, v in sp.items()}
-    if fmt.get("space_before") is not None:
-        sp["before"] = round(float(fmt["space_before"]) * 20)
-    if fmt.get("space_after") is not None:
-        sp["after"] = round(float(fmt["space_after"]) * 20)
-    ls = fmt.get("line_spacing")
-    if ls is not None:
-        m = re.fullmatch(r"\s*([0-9.]+)\s*pt\s*", str(ls))
-        if m:
-            sp["line"], sp["lineRule"] = round(float(m.group(1)) * 20), "exact"
-        else:
-            sp["line"], sp["lineRule"] = round(float(ls) * 240), "auto"
-    if {"space_before", "space_after", "line_spacing"} & {k for k, v in fmt.items() if v is not None}:
+    if "outline_level" in given:
+        level = int(fmt["outline_level"])
+        if not 0 <= level <= 9:
+            raise ValueError("outline_level is 0-8 (9 = body text)")
+        ppr.add(w.OutlineLvl(val=level), replace=True)
+    if "shading" in given:
+        ppr.add(w.Shd(val="clear", color="auto", fill=_hex(fmt["shading"])), replace=True)
+    if "borders" in given:
+        borders = fmt["borders"]
+        sides = ({s: getattr(borders, s) for s in BORDER_SIDES} if isinstance(borders, Borders)
+                 else dict(borders))
+        bad = set(sides) - set(BORDER_SIDES)
+        if bad:
+            raise ValueError(f"border sides are {', '.join(BORDER_SIDES)}")
+        pbdr = w.PBdr()
+        for side in BORDER_SIDES:
+            if sides.get(side) is not None:
+                pbdr.add(_border_element(getattr(w, side.capitalize()), sides[side]))
+        ppr.add(pbdr, replace=True)
+    if "tabs" in given:
+        tabs = w.Tabs()
+        for tab in fmt["tabs"]:
+            t = tab if isinstance(tab, Tab) else Tab(*tab)
+            attrs: dict[str, Any] = {"val": t.align, "pos": to_twips(t.position)}
+            if t.leader != "none":
+                attrs["leader"] = t.leader
+            tabs.add(w.Tab(**attrs))
+        if len(tabs):
+            ppr.add(tabs, replace=True)
+        elif ppr.first("w:tabs") is not None:
+            ppr.remove(ppr.first("w:tabs"))
+    if {"space_before", "space_after", "line_spacing"} & given:
+        spacing = ppr.first("w:spacing")
+        sp = {k.rpartition("}")[2]: v for k, v in (spacing.attrib.items()
+                                                    if spacing is not None else [])}
+        if "space_before" in given:
+            sp["before"] = to_twips(fmt["space_before"])
+            sp.pop("beforeAutospacing", None)
+        if "space_after" in given:
+            sp["after"] = to_twips(fmt["space_after"])
+            sp.pop("afterAutospacing", None)
+        if "line_spacing" in given:
+            sp["line"], sp["lineRule"] = _line_attrs(fmt["line_spacing"])
         ppr.add(w.Spacing(**sp), replace=True)
-    if any(fmt.get(k) is not None for k in ("indent_left", "indent_right", "first_line")):
+    if {"indent_left", "indent_right", "first_line"} & given:
         ind = ppr.first("w:ind")
         attrs = {k.rpartition("}")[2]: v for k, v in (ind.attrib.items() if ind is not None else [])}
-        if fmt.get("indent_left") is not None:
-            attrs["left"] = _twips(fmt["indent_left"])
-        if fmt.get("indent_right") is not None:
-            attrs["right"] = _twips(fmt["indent_right"])
-        if fmt.get("first_line") is not None:
-            v = _twips(fmt["first_line"])
+        if "indent_left" in given:
+            attrs.pop("start", None)
+            attrs["left"] = to_twips(fmt["indent_left"])
+        if "indent_right" in given:
+            attrs.pop("end", None)
+            attrs["right"] = to_twips(fmt["indent_right"])
+        if "first_line" in given:
+            v = to_twips(fmt["first_line"])
             attrs.pop("firstLine", None)
             attrs.pop("hanging", None)
             if v >= 0:
@@ -158,9 +297,12 @@ def apply_paragraph_format(ppr: OoxElement, **fmt: Any) -> OoxElement:
 
 def format_paragraph(paragraph: OoxElement, **fmt: Any) -> OoxElement:
     """Paragraph formatting: align (left/center/right/justify), space_before /
-    space_after (pt), line_spacing (multiple or "12pt"), indent_left /
-    indent_right / first_line (EMU or twips; negative first_line = hanging),
-    keep_with_next, keep_together, page_break_before."""
+    space_after (pt), line_spacing (a multiple or a ``LineSpacing``),
+    indent_left / indent_right / first_line (pt or a ``Length``; negative
+    first_line = hanging), keep_with_next, keep_together, page_break_before,
+    widow_control, contextual_spacing, outline_level (0-8), shading (hex
+    fill), borders (``Borders`` or {"bottom": Border(), ...}), tabs (``Tab``
+    stops; replaces the paragraph's own)."""
     ppr = paragraph.first("w:pPr")
     if ppr is None:
         ppr = w.PPr()
@@ -179,7 +321,8 @@ def add_style(doc: WordprocessingDocument, name: str, *, kind: str = "paragraph"
               base: str | None = None, next_style: str | None = None,
               quick: bool = True, **fmt: Any) -> str:
     """Add a custom style and return its id.  ``fmt`` takes the run and
-    paragraph options (paragraph styles may use both)."""
+    paragraph options (paragraph styles may use both; ``shading`` on a
+    paragraph style shades the paragraph)."""
     if kind not in ("paragraph", "character"):
         raise ValueError("kind is 'paragraph' or 'character'")
     try:
@@ -189,18 +332,21 @@ def add_style(doc: WordprocessingDocument, name: str, *, kind: str = "paragraph"
     else:
         raise ValueError(f"a style named {name!r} already exists")
     sid = style_id_for(name)
-    existing = {st.get(f"{{{W}}}styleId") for st in doc.styles.iterchildren(f"{{{W}}}style")}
+    styles = doc.ensure_styles()
+    existing = {st.get(f"{{{W}}}styleId") for st in styles.iterchildren(f"{{{W}}}style")}
     n, base_sid = 1, sid
     while sid in existing:
         n += 1
         sid = f"{base_sid}{n}"
-    run_fmt = {k: v for k, v in fmt.items() if k in RUN_OPTIONS}
-    para_fmt = {k: v for k, v in fmt.items() if k in PARAGRAPH_OPTIONS}
+    # "shading" is both a run and a paragraph option: a paragraph style shades the paragraph
+    para_fmt = ({k: v for k, v in fmt.items() if k in PARAGRAPH_OPTIONS}
+                if kind == "paragraph" else {})
+    run_fmt = {k: v for k, v in fmt.items() if k in RUN_OPTIONS and k not in para_fmt}
+    if kind == "character" and set(fmt) & (set(PARAGRAPH_OPTIONS) - set(RUN_OPTIONS)):
+        raise TypeError("character styles take run formatting only")
     unknown = set(fmt) - set(run_fmt) - set(para_fmt)
     if unknown:
         raise TypeError(f"unknown format {sorted(unknown)}")
-    if kind == "character" and para_fmt:
-        raise TypeError("character styles take run formatting only")
     st = w.Style(w.Name(val=name), type=kind, styleId=sid, customStyle=True)
     base = base if base is not None else ("Normal" if kind == "paragraph" else None)
     if base:
@@ -213,136 +359,5 @@ def add_style(doc: WordprocessingDocument, name: str, *, kind: str = "paragraph"
         st.add(apply_paragraph_format(w.PPr(), **para_fmt))
     if run_fmt:
         st.add(apply_run_format(w.RPr(), **run_fmt))
-    doc.styles.add(st)
+    styles.add(st)
     return sid
-
-
-# -- resolving -------------------------------------------------------------------------------
-def _theme_fonts(doc: WordprocessingDocument) -> dict[str, str]:
-    found = doc.related_parts(doc.main_part, "ThemePart")
-    out: dict[str, str] = {}
-    if not found:
-        return out
-    root = found[0].element
-    for kind in ("major", "minor"):
-        el = root.find(f".//{{{A}}}{kind}Font/{{{A}}}latin")
-        if el is not None:
-            out[kind] = el.get("typeface", "")
-    return out
-
-
-def _merge_rpr(into: dict[str, Any], rpr: OoxElement | None, theme: dict[str, str]) -> None:
-    if rpr is None:
-        return
-    for key, tag in (("bold", "b"), ("italic", "i"), ("strike", "strike"), ("caps", "caps"),
-                     ("small_caps", "smallCaps")):
-        v = _on(rpr.first(f"w:{tag}"))
-        if v is not None:
-            into[key] = v
-    u = rpr.first("w:u")
-    if u is not None:
-        into["underline"] = None if _val(u) in (None, "none") else _val(u)
-    sz = _val(rpr.first("w:sz"))
-    if sz is not None:
-        into["size"] = int(sz) / 2
-    fonts = rpr.first("w:rFonts")
-    if fonts is not None:
-        if _val(fonts, "ascii"):
-            into["font"] = _val(fonts, "ascii")
-        elif _val(fonts, "asciiTheme"):
-            theme_name = _val(fonts, "asciiTheme") or ""
-            into["font"] = theme.get("major" if theme_name.startswith("major") else "minor")
-    color = rpr.first("w:color")
-    if color is not None:
-        into["color"] = None if _val(color) in (None, "auto") else (_val(color) or "").upper()
-    hl = _val(rpr.first("w:highlight"))
-    if hl is not None:
-        into["highlight"] = None if hl == "none" else hl
-    va = _val(rpr.first("w:vertAlign"))
-    if va is not None:
-        into["superscript"], into["subscript"] = va == "superscript", va == "subscript"
-
-
-def _merge_ppr(into: dict[str, Any], ppr: OoxElement | None) -> None:
-    if ppr is None:
-        return
-    jc = _val(ppr.first("w:jc"))
-    if jc is not None:
-        into["align"] = _ALIGN_BACK.get(jc, jc)
-    sp = ppr.first("w:spacing")
-    if sp is not None:
-        if _val(sp, "before") is not None:
-            into["space_before"] = int(_val(sp, "before") or 0) / 20
-        if _val(sp, "after") is not None:
-            into["space_after"] = int(_val(sp, "after") or 0) / 20
-        if _val(sp, "line") is not None:
-            line, rule = int(_val(sp, "line") or 240), _val(sp, "lineRule") or "auto"
-            into["line_spacing"] = line / 240 if rule == "auto" else f"{line / 20:g}pt"
-    ind = ppr.first("w:ind")
-    if ind is not None:
-        left = _val(ind, "left") or _val(ind, "start")
-        right = _val(ind, "right") or _val(ind, "end")
-        if left is not None:
-            into["indent_left"] = int(left)
-        if right is not None:
-            into["indent_right"] = int(right)
-        if _val(ind, "firstLine") is not None:
-            into["first_line"] = int(_val(ind, "firstLine") or 0)
-        if _val(ind, "hanging") is not None:
-            into["first_line"] = -int(_val(ind, "hanging") or 0)
-    for key, tag in (("keep_with_next", "keepNext"), ("keep_together", "keepLines"),
-                     ("page_break_before", "pageBreakBefore")):
-        v = _on(ppr.first(f"w:{tag}"))
-        if v is not None:
-            into[key] = v
-
-
-def _style_chain(styles: dict[str, OoxElement], sid: str | None) -> list[OoxElement]:
-    chain: list[OoxElement] = []
-    while sid and sid in styles and len(chain) < 20:
-        st = styles[sid]
-        if st in chain:
-            break
-        chain.append(st)
-        sid = _val(st.first("w:basedOn"))
-    return list(reversed(chain))  # root first
-
-
-def effective_format(doc: WordprocessingDocument, paragraph: OoxElement,
-                     run: OoxElement | None = None) -> dict[str, Any]:
-    """Formatting Word applies to ``run`` (or to the paragraph mark) in
-    ``paragraph``: run options plus paragraph options, plus ``style`` (the
-    paragraph style's name).  Sizes and spacing in points, indents in twips."""
-    theme = _theme_fonts(doc)
-    styles_root = None
-    found = doc.related_parts(doc.main_part, "StyleDefinitionsPart")
-    if found:
-        styles_root = found[0].element
-    styles = {st.get(f"{{{W}}}styleId"): st for st in
-              (styles_root.iterchildren(f"{{{W}}}style") if styles_root is not None else [])}
-    out: dict[str, Any] = {"bold": False, "italic": False, "underline": None, "strike": False,
-                           "size": 10.0, "font": "Times New Roman", "color": None,
-                           "align": "left", "space_before": 0.0, "space_after": 0.0}
-    if styles_root is not None:
-        defaults = styles_root.first("w:docDefaults")
-        if defaults is not None:
-            rd = defaults.first("w:rPrDefault")
-            pd = defaults.first("w:pPrDefault")
-            _merge_rpr(out, rd.first("w:rPr") if rd is not None else None, theme)
-            _merge_ppr(out, pd.first("w:pPr") if pd is not None else None)
-    ppr = paragraph.first("w:pPr")
-    psid = _val(ppr.first("w:pStyle")) if ppr is not None else None
-    if psid is None:
-        psid = next((sid for sid, st in styles.items() if st.get(f"{{{W}}}type") == "paragraph"
-                     and st.get(f"{{{W}}}default") in ("1", "true")), None)
-    for st in _style_chain(styles, psid):
-        _merge_ppr(out, st.first("w:pPr"))
-        _merge_rpr(out, st.first("w:rPr"), theme)
-    out["style"] = _val(styles[psid].first("w:name")) if psid in styles else None
-    _merge_ppr(out, ppr)
-    rpr = run.first("w:rPr") if run is not None else (ppr.first("w:rPr") if ppr is not None else None)
-    if rpr is not None:
-        for st in _style_chain(styles, _val(rpr.first("w:rStyle"))):
-            _merge_rpr(out, st.first("w:rPr"), theme)
-        _merge_rpr(out, rpr, theme)
-    return out

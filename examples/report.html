@@ -39,7 +39,7 @@ sec.footer_text("Page {PAGE} of {NUMPAGES}", align="center")
 sec.different_first_page = True            # nothing on page 1 ...
 sec.header_text("Cover", kind="first")     # ... unless you add a "first" header
 print(sec)</code></pre>
-<pre class="out">&lt;Section portrait 11906x16838 twips&gt;</pre>
+<pre class="out">&lt;Section portrait 595.3x841.9 pt&gt;</pre>
 <p>Kinds are <code>"default"</code>, <code>"first"</code> and <code>"even"</code> (an
 <code>"even"</code> header switches on different odd and even pages).</p>
 
@@ -54,17 +54,17 @@ Word) until you give it its own.</p>
 
 <h2>Links, bookmarks and notes</h2>
 <pre><code class="run">p = doc.add_paragraph("See ")
-doc.add_hyperlink(p, "Ecma", url="https://ecma-international.org/")
+doc.add_hyperlink(p, "Ecma", target="https://ecma-international.org/")
 p.add(w.R(w.T(" and ", space="preserve")))
 doc.add_hyperlink(p, "the appendix", anchor="appendix")        # internal link
 doc.add_bookmark("appendix", doc.add_heading("Figures", 2))
 doc.add_footnote(p, "A footnote.")
 doc.add_endnote(p, "An endnote.")
 doc.add_comment(p, "Please check.", author="Ada Lovelace")
-print(doc.hyperlinks())
-print(doc.footnotes(), doc.comments()[0]["author"])</code></pre>
-<pre class="out">[('Ecma', 'https://ecma-international.org/'), ('the appendix', '#appendix')]
-[(1, 'A footnote.')] Ada Lovelace</pre>
+print([(link.text, link.target or link.anchor) for link in doc.hyperlinks()])
+print([note.text for note in doc.footnotes()], doc.comments()[0].author)</code></pre>
+<pre class="out">[('Ecma', 'https://ecma-international.org/'), ('the appendix', 'appendix')]
+['A footnote.'] Ada Lovelace</pre>
 <p>The readers work on documents from Word and LibreOffice too. Styles such as
 <em>Hyperlink</em> or <em>Footnote Text</em> are added the first time they are needed.</p>
 

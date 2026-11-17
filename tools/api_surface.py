@@ -39,6 +39,15 @@ CLASSES = [
     "oox.properties.CoreProperties", "oox.properties.ExtendedProperties",
     "oox.properties.CustomProperties", "oox.xlstyles.StyleSheet", "oox.charts.Series",
     "oox.spreadsheet.Formula", "oox.spreadsheet.CellError",
+    "oox.formatting.LineSpacing", "oox.formatting.Border", "oox.formatting.Borders",
+    "oox.formatting.Tab", "oox.resolve.Formatting", "oox.resolve.RunFormat",
+    "oox.resolve.ParagraphFormat", "oox.numbering.ListItem", "oox.document.ImageData",
+    "oox.opc.Relationships", "oox.opc.Relationship",
+    *(f"oox.records.{n}" for n in (
+        "Record", "Hyperlink", "Comment", "Chart", "CellFormat", "Note", "ContentControl",
+        "Picture", "Protection", "Revision", "TextBox", "ConditionalFormat", "Validation",
+        "ExcelTable", "PageSetup", "SheetOptions", "WorkbookProtection", "Placeholder", "Shape",
+        "SlideTableInfo", "SlideSection")),
 ]
 # module -> the public names (None: every class and function defined there)
 MODULES = {
@@ -46,6 +55,7 @@ MODULES = {
     "oox.spreadsheet": ["cell", "row", "cell_ref", "column_letter", "split_ref",
                         "excel_serial", "from_excel_serial"],
     "oox.charts": ["build_chart", "chart_info", "PALETTE"],
+    "oox.ns": ["qn", "W", "A", "R", "MC", "WP", "PIC", "V", "O", "X", "P", "C"],
 }
 # lxml's own API on OoxElement (append, find, iter ...) is lxml's, not ours
 LXML_BASE = "lxml.etree.ElementBase"

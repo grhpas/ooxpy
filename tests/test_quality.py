@@ -39,7 +39,7 @@ def test_foreign_master_without_layout_list_gets_one():
 
 def test_broken_sheet_relationship_is_a_clear_error():
     book = SpreadsheetDocument.new()
-    book.main_part.rels.items.clear()
+    book.main_part.rels.clear()
     buf = io.BytesIO()
     book.save(buf)
     again = open_document(io.BytesIO(buf.getvalue()))

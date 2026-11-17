@@ -20,7 +20,7 @@ def main(path: str) -> None:
     p = doc.add_paragraph("Revenue grew in every region. Details are in ")
     doc.add_hyperlink(p, "the appendix", anchor="appendix")
     p.add(w.R(w.T("; the method follows ", space="preserve")))
-    doc.add_hyperlink(p, "ECMA-376", url="https://ecma-international.org/publications-and-standards/standards/ecma-376/")
+    doc.add_hyperlink(p, "ECMA-376", target="https://ecma-international.org/publications-and-standards/standards/ecma-376/")
     p.add(w.R(w.T(".")))
     doc.add_footnote(p, "All figures are unaudited.")
     doc.add_comment(p, "Confirm with finance before sending.", author="Ada Lovelace")

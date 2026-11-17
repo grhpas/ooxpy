@@ -4,7 +4,7 @@
     doc.suggest_insert(p, " (draft)", author="Ada")
     doc.suggest_delete(p, "very ", author="Bob")
     doc.suggest_replace(p, "2025", "2026", author="Ada")
-    doc.revisions()       # [{"kind": "insert", "author": "Ada", "text": " (draft)", ...}, ...]
+    doc.revisions()       # [Revision(kind="insert", author="Ada", text=" (draft)", ...), ...]
     doc.accept_all()      # or doc.reject_all()
 
 Insertions are ``w:ins`` around runs; deletions are ``w:del`` around runs whose
@@ -187,16 +187,20 @@ def suggest_replace(doc: WordprocessingDocument, paragraph: OoxElement, old: str
 
 
 # -- reading -----------------------------------------------------------------------------------
-def revisions(doc: WordprocessingDocument) -> list[dict[str, Any]]:
-    """Tracked changes in document order (body first, then other stories):
-    ``{"kind", "author", "date", "text"}``; kind is insert, delete, move-from,
-    move-to, paragraph-insert, paragraph-delete, row-insert, row-delete or
-    format."""
+def revisions(doc: WordprocessingDocument) -> list:
+    """A ``Revision`` (kind, author, date, text) for each tracked change, in
+    document order (body first, then other stories); kind is insert, delete,
+    move-from, move-to, paragraph-insert, paragraph-delete, row-insert,
+    row-delete or format."""
+    from .records import Revision
+
     out = []
     names = {"ins": "insert", "del": "delete", "moveFrom": "move-from", "moveTo": "move-to"}
+    from .walk import iter_story
+
     for root in _stories(doc):
-        for el in root.iter(_q("ins"), _q("del"), _q("moveFrom"), _q("moveTo"),
-                            *(_q(t) for t in _CHANGE_TAGS)):
+        for el in iter_story(root, _q("ins"), _q("del"), _q("moveFrom"), _q("moveTo"),
+                             *(_q(t) for t in _CHANGE_TAGS)):
             local, parent = _local(el), el.getparent()
             kind = names.get(local, "format")
             if local in ("ins", "del") and parent is not None:
@@ -206,8 +210,8 @@ def revisions(doc: WordprocessingDocument) -> list[dict[str, Any]]:
                     kind = "row-" + ("insert" if local == "ins" else "delete")
             text = "".join(t.text or "" for t in el.iter(_q("t"), _q("delText"))) \
                 if kind in ("insert", "delete", "move-from", "move-to") else ""
-            out.append({"kind": kind, "author": el.get(_q("author")),
-                        "date": el.get(_q("date")), "text": text})
+            out.append(Revision(kind, author=el.get(_q("author")), date=el.get(_q("date")),
+                                text=text))
     return out
 
 

@@ -37,7 +37,7 @@ import oox
 from oox import PresentationDocument, SpreadsheetDocument, WordprocessingDocument, open_document, teletype
 from oox.ns import w, w14
 from oox.spreadsheet import Formula
-from oox.units import Cm, Inches
+from oox.units import Cm, Emu, Inches
 
 from .assets import image
 
@@ -122,7 +122,7 @@ def docx_styles_pagebreak() -> bytes:
     doc = WordprocessingDocument.new(minimal=True)
     style = w.Style(w.Name(val="WithBreak"), w.PPr(w.PageBreakBefore()),
                     type="paragraph", styleId="WithBreak")
-    doc.styles.add(style)
+    doc.ensure_styles().add(style)
     doc.body.add(w.P(w.R(w.T("Page 1"))),
                  w.P(w.PPr(w.PStyle(val=style)), w.R(w.T("Page 2: style 'WithBreak'"))))
     return _bytes(doc)
@@ -140,7 +140,7 @@ def docx_odfpy_passwd() -> bytes:
     doc = WordprocessingDocument.new(minimal=True)
     style = w.Style(w.Name(val="Table Contents"), w.PPr(w.SuppressLineNumbers()),
                     type="paragraph", styleId="TableContents")
-    doc.styles.add(style)
+    doc.ensure_styles().add(style)
     grid = w.TblGrid(*(w.GridCol(w=x) for x in [964] * 4 + [2160] * 3))
     tbl = w.Tbl(w.TblPr(), grid)
     for line in ["root:x:0:0:root:/root:/bin/bash", "ada:x:1000:1000:Ada:/home/ada:/bin/zsh"]:
@@ -277,20 +277,21 @@ def pptx_placeholders() -> bytes:
 def pptx_textboxes_pictures() -> bytes:
     deck = PresentationDocument.new(layouts="basic")
     s = deck.add_slide()
-    deck.add_textbox(s, Inches(0.7), Inches(0.5), Inches(12), Inches(1), "Text boxes and pictures",
-                     size=36, bold=True, color="1F3864")
-    deck.add_textbox(s, Inches(0.7), Inches(1.8), Inches(5), Inches(2),
-                     "Left aligned\nsecond paragraph", size=20)
-    deck.add_textbox(s, Inches(0.7), Inches(4.5), Inches(5), Inches(1), "Centered", size=20,
-                     align="center")
+    deck.add_text_box(s, "Text boxes and pictures", x=Inches(0.7), y=Inches(0.5), width=Inches(12),
+                      height=Inches(1), size=36, bold=True, color="1F3864")
+    deck.add_text_box(s, "Left aligned\nsecond paragraph", x=Inches(0.7), y=Inches(1.8),
+                      width=Inches(5), height=Inches(2), size=20)
+    deck.add_text_box(s, "Centered", x=Inches(0.7), y=Inches(4.5), width=Inches(5),
+                      height=Inches(1), size=20, align="center")
     for i, fmt in enumerate(("PNG", "JPEG", "GIF", "BMP")):
-        deck.add_picture(s, image(fmt), Inches(6.5 + (i % 2) * 3.2), Inches(1.8 + (i // 2) * 2),
-                         width=Inches(3))
+        deck.add_picture(s, image(fmt), x=Inches(6.5 + (i % 2) * 3.2),
+                         y=Inches(1.8 + (i // 2) * 2), width=Inches(3))
     return _bytes(deck)
 
 
 def pptx_4x3() -> bytes:
-    deck = PresentationDocument.new(width=9144000, height=6858000, layouts="basic")
+    deck = PresentationDocument.new(width=Emu(9144000), height=Emu(6858000),
+                                    layouts="basic")
     s = deck.add_slide("Title and Content")
     deck.set_placeholder_text(s, "title", "4:3 slide size")
     deck.set_placeholder_text(s, "body", ["Placeholders scaled to 4:3", "Title fits the width"])
@@ -305,7 +306,7 @@ def pptx_edit_powerpoint_template() -> bytes:
     deck.set_placeholder_text(s, "title", "Two columns (PowerPoint layout)")
     deck.set_placeholder_text(s, 1, ["left 1", "left 2"])
     deck.set_placeholder_text(s, 2, "right")
-    deck.add_picture(deck.add_slide("Title Only"), image("PNG"), Inches(2), Inches(2),
+    deck.add_picture(deck.add_slide("Title Only"), image("PNG"), x=Inches(2), y=Inches(2),
                      width=Inches(4))
     return _bytes(deck)
 
@@ -392,7 +393,7 @@ def docx_links_notes() -> bytes:
     doc = WordprocessingDocument.new()
     doc.add_heading("Links and notes", 1)
     p = doc.add_paragraph("External link to ")
-    doc.add_hyperlink(p, "Ecma", url="https://ecma-international.org/", tooltip="Ecma site")
+    doc.add_hyperlink(p, "Ecma", target="https://ecma-international.org/", tooltip="Ecma site")
     p.add(w.R(w.T(" and an internal link to ", space="preserve")))
     doc.add_hyperlink(p, "the target heading", anchor="target")
     p.add(w.R(w.T(".")))
@@ -499,16 +500,16 @@ def docx_formatting_styles() -> bytes:
     paragraph alignment, spacing and indents.  Paragraph numbers in comments."""
     doc = WordprocessingDocument.new()
     doc.add_heading("Formatting and styles", 1)                          # 1
-    doc.add_style("Note", italic=True, color="595959", space_before=6, indent_left=720)
+    doc.add_style("Note", italic=True, color="595959", space_before=6, indent_left=36)
     doc.add_style("Code Char", kind="character", font="Courier New", size=10)
     p = doc.add_paragraph("", style="Note")                               # 2
     doc.add_run(p, "Warning: ", bold=True, color="C00000")                # chars 1-9
     doc.add_run(p, "check ", style="Code Char")                           # chars 10-15
     doc.add_run(p, "this", underline=True, size=14, highlight="yellow")   # chars 16-19
     q = doc.add_paragraph("Justified, 12 pt after, first line indented 18 pt. " * 4)  # 3
-    doc.format_paragraph(q, align="justify", space_after=12, first_line=360)
+    doc.format_paragraph(q, align="justify", space_after=12, first_line=18)
     r = doc.add_paragraph("Right aligned, indented 36 pt on the left.")   # 4
-    doc.format_paragraph(r, align="right", indent_left=720)
+    doc.format_paragraph(r, align="right", indent_left=36)
     s = doc.add_paragraph("")                                             # 5
     doc.add_run(s, "H")
     doc.add_run(s, "2", subscript=True)
@@ -614,8 +615,8 @@ def pptx_properties_images() -> bytes:
     deck.custom_properties["Project"] = "Apollo"
     deck.custom_properties["Approved"] = True
     slide = deck.add_slide("Blank")
-    deck.add_picture(slide, image("EMF"), Inches(1), Inches(1), width=Cm(6), descr="EMF")
-    deck.add_picture(slide, image("SVG"), Inches(5), Inches(1), width=Cm(6),
+    deck.add_picture(slide, image("EMF"), x=Inches(1), y=Inches(1), width=Cm(6), descr="EMF")
+    deck.add_picture(slide, image("SVG"), x=Inches(5), y=Inches(1), width=Cm(6),
                      fallback=image("PNG"), descr="SVG")
     return _bytes(deck)
 
@@ -680,7 +681,7 @@ def xlsx_layout() -> bytes:
     book.set_row_height("Sales", 1, 24)
     book.merge_cells("Sales", "A6:D6")
     book.set_value("Sales", "A6", "Merged across A6:D6", style={"align": "center", "bold": True})
-    book.freeze_panes("Sales", "B2")
+    book.set_frozen_panes("Sales", "B2")
     book.auto_filter("Sales", "A1:E4")
     book.define_name("Totals", "Sales", "D2:D4")
     book.add_validation("Sales", "E2:E4", values=["Yes", "No"], prompt="Pick one")
@@ -790,12 +791,12 @@ def xlsx_print_options() -> bytes:
         book.append_row("Report", ["North" if i % 2 else "South", i * 10, "Ada"])
     book.append_row("Lookup", ["North", "South"])
     book.append_row("Internal", ["not for users"])
-    book.page_setup("Report", orientation="landscape", paper="A4", fit_width=1,
+    book.set_page_setup("Report", orientation="landscape", paper="A4", fit_width=1,
                     print_area="A1:C30", repeat_rows="1:1", header="Quarterly report",
                     footer={"left": "R&D", "right": "Page {page} of {pages}"}, gridlines=True)
-    book.sheet_options("Report", tab_color="2F5496", zoom=120)
-    book.sheet_options("Lookup", hidden=True)
-    book.sheet_options("Internal", hidden="very")
+    book.set_sheet_options("Report", tab_color="2F5496", zoom=120)
+    book.set_sheet_options("Lookup", hidden=True)
+    book.set_sheet_options("Internal", hidden="very")
     book.protect_sheet("Report", password="secret", allow=("sort", "autoFilter"))
     book.share_strings()
     return _bytes(book)
@@ -969,18 +970,20 @@ def pptx_charts() -> bytes:
     """Charts on two slides, each with an embedded workbook."""
     deck = PresentationDocument.new(layouts="basic")
     s1 = deck.add_slide("Blank")
-    deck.add_textbox(s1, Inches(0.5), Inches(0.3), Inches(9), Inches(0.8), "Traffic")
+    deck.add_text_box(s1, "Traffic", x=Inches(0.5), y=Inches(0.3), width=Inches(9),
+                      height=Inches(0.8))
     deck.add_chart(s1, "line", ["Jan", "Feb", "Mar", "Apr"],
                    {"Visits": [1200, 1450, 1390, 1600], "Orders": [310, 365, 330, 410]},
+                   x=Inches(1), y=Inches(1.5), width=Inches(8), height=Inches(4.5),
                    title="Visits and orders", y_title="count")
     s2 = deck.add_slide("Blank")
-    deck.add_textbox(s2, Inches(0.5), Inches(0.3), Inches(9), Inches(0.8), "Mix")
+    deck.add_text_box(s2, "Mix", x=Inches(0.5), y=Inches(0.3), width=Inches(9), height=Inches(0.8))
     deck.add_chart(s2, "doughnut", ["Web", "Shop", "Phone"], {"Channel": [55, 30, 15]},
-                   Inches(0.5), Inches(1.5), Inches(4.5), Inches(4.5), labels="percent",
-                   title="Channels")
+                   x=Inches(0.5), y=Inches(1.5), width=Inches(4.5), height=Inches(4.5),
+                   labels="percent", title="Channels")
     deck.add_chart(s2, "column", ["2024", "2025"], {"New": [40, 55], "Returning": [60, 45]},
-                   Inches(5.2), Inches(1.5), Inches(4.5), Inches(4.5), grouping="percent",
-                   title="Customers", number_format="0%")
+                   x=Inches(5.2), y=Inches(1.5), width=Inches(4.5), height=Inches(4.5),
+                   grouping="percent", title="Customers", number_format="0%")
     return _bytes(deck)
 
 
@@ -999,19 +1002,20 @@ def pptx_layouts_tables_notes() -> bytes:
     s3 = deck.add_slide("Title Only")
     deck.set_placeholder_text(s3, "title", "Table")
     deck.add_table(s3, [["Region", "Q1", "Q2"], ["North", 120, 135], ["South", 95, 110],
-                        ["Total", None, 245]], Inches(1), Inches(2), Inches(8),
-                   merges=["A4:B4"])
+                        ["Total", None, 245]],
+                   x=Inches(1), y=Inches(2), width=Inches(8), merges=["A4:B4"])
     deck.set_notes(s3, "Totals are rounded.")
     s4 = deck.add_slide("Picture with Caption")
     deck.set_placeholder_text(s4, "title", "Picture")
     deck.set_placeholder_text(s4, 2, "Cropped to fill the placeholder")
     deck.set_placeholder_picture(s4, "pic", image("PNG"))
     s5 = deck.add_slide("Blank")
-    deck.add_shape(s5, "roundRect", Inches(1), Inches(2), Inches(3), Inches(1.2), text="Step 1")
-    deck.add_shape(s5, "chevron", Inches(4.5), Inches(2), Inches(3), Inches(1.2), text="Step 2",
-                   fill="ED7D31")
-    deck.add_shape(s5, "ellipse", Inches(8), Inches(2), Inches(2), Inches(2), text="Done",
-                   fill="70AD47", line="375623", line_width=2)
+    deck.add_shape(s5, "roundRect", x=Inches(1), y=Inches(2), width=Inches(3), height=Inches(1.2),
+                   text="Step 1")
+    deck.add_shape(s5, "chevron", x=Inches(4.5), y=Inches(2), width=Inches(3), height=Inches(1.2),
+                   text="Step 2", fill="ED7D31")
+    deck.add_shape(s5, "ellipse", x=Inches(8), y=Inches(2), width=Inches(2), height=Inches(2),
+                   text="Done", fill="70AD47", line="375623", line_width=2)
     return _bytes(deck)
 
 
@@ -1024,19 +1028,19 @@ def pptx_links_table_edit() -> bytes:
     s2 = deck.add_slide("Title Only")
     s3 = deck.add_slide("Title Only")
     deck.set_placeholder_text(s1, "title", "Links")
-    box = deck.add_textbox(s1, Inches(1), Inches(2), Inches(8), Inches(0.8),
-                           "Read the docs or mail the team.", size=24)
+    box = deck.add_text_box(s1, "Read the docs or mail the team.", x=Inches(1), y=Inches(2),
+                            width=Inches(8), height=Inches(0.8), size=24)
     deck.set_link(s1, box, "https://example.org/docs", text="docs", tooltip="Manual")
     deck.set_link(s1, box, "mailto:team@example.org", text="mail the team")
-    nxt = deck.add_shape(s1, "rightArrow", Inches(1), Inches(4), Inches(2.5), Inches(1),
-                         text="Next", name="Next arrow")
+    nxt = deck.add_shape(s1, "rightArrow", x=Inches(1), y=Inches(4), width=Inches(2.5),
+                         height=Inches(1), text="Next", name="Next arrow")
     deck.set_link(s1, nxt, "next")
-    jump = deck.add_shape(s1, "roundRect", Inches(5), Inches(4), Inches(3), Inches(1),
-                          text="Summary", name="To summary")
+    jump = deck.add_shape(s1, "roundRect", x=Inches(5), y=Inches(4), width=Inches(3),
+                          height=Inches(1), text="Summary", name="To summary")
     deck.set_link(s1, jump, s3)
     deck.set_placeholder_text(s2, "title", "Edited table")
     deck.add_table(s2, [["Region", "Q1", "Q2"], ["North", 120, 135], ["South", 95, 110]],
-                   Inches(1), Inches(2), Inches(6), name="Sales")
+                   x=Inches(1), y=Inches(2), width=Inches(6), name="Sales")
     t = deck.table(s2, "Sales")
     t.set_text(1, 1, 125)
     t.add_row(["West", 80, 84])
@@ -1045,8 +1049,8 @@ def pptx_links_table_edit() -> bytes:
     t.add_row(["Total", "see appendix"])
     t.merge(3, 1, 3, 3)
     deck.set_placeholder_text(s3, "title", "Summary")
-    back = deck.add_shape(s3, "leftArrow", Inches(1), Inches(4), Inches(2.5), Inches(1),
-                          text="Start", name="Back arrow")
+    back = deck.add_shape(s3, "leftArrow", x=Inches(1), y=Inches(4), width=Inches(2.5),
+                          height=Inches(1), text="Start", name="Back arrow")
     deck.set_link(s3, back, "first")
     return _bytes(deck)
 
@@ -1331,7 +1335,8 @@ def docx_observe_iso_table_band_size() -> bytes:
 def pptx_observe_missing_required() -> bytes:
     deck = PresentationDocument.new(layouts="basic")
     s = deck.add_slide()
-    deck.add_textbox(s, Inches(1), Inches(1), Inches(6), Inches(1), "spTree without grpSpPr")
+    deck.add_text_box(s, "spTree without grpSpPr", x=Inches(1), y=Inches(1), width=Inches(6),
+                      height=Inches(1))
     tree = s.first("p:cSld").first("p:spTree")
     tree.remove(tree.first("p:grpSpPr"))  # required
     return _bytes(deck)

@@ -7,6 +7,7 @@ import io
 import pytest
 
 from oox import PresentationDocument, open_document
+from oox.records import Hyperlink, SlideSection
 from oox.units import Inches
 
 
@@ -20,7 +21,7 @@ def _reload(deck):
 def _deck_with_table(rows, **kw):
     deck = PresentationDocument.new(layouts="basic")
     slide = deck.add_slide("Blank")
-    deck.add_table(slide, rows, Inches(1), Inches(1), Inches(6), name="Prices", **kw)
+    deck.add_table(slide, rows, x=Inches(1), y=Inches(1), width=Inches(6), name="Prices", **kw)
     return deck, slide
 
 
@@ -82,8 +83,8 @@ def test_new_rows_and_columns_copy_formatting():
     assert t.cell(2, 0).find(".//{*}rPr").get("sz") == "1400"
     t.add_column(["H3", "z", "r"], width=Inches(1))
     assert t.values()[0] == ["H1", "H2", "H3"]
-    assert t.widths[-1] == Inches(1)
-    assert int(t.frame.find(".//{*}xfrm/{*}ext").get("cx")) == sum(t.widths)
+    assert t.widths[-1] == 72
+    assert int(t.frame.find(".//{*}xfrm/{*}ext").get("cx")) == round(sum(t.widths) * 12700)
     t.add_column(["H0", "w", "o"], index=0)
     assert [r[0] for r in t.values()] == ["H0", "w", "o"]
     t.delete_column(0)
@@ -106,7 +107,7 @@ def test_merge_and_unmerge():
         t.add_column(index=1)
     again = _reload(deck)
     assert again.validate(level="full") == {}
-    assert again.tables(again.slides[0])[0]["merges"] == ["A1:B2"]
+    assert again.tables(again.slides[0])[0].merges == ["A1:B2"]
     t.unmerge(1, 1)
     assert t.merges() == [] and t.text(0, 0) == "a\nb\nd\ne" and t.text(1, 1) == ""
 
@@ -131,8 +132,8 @@ def test_set_style_and_switches():
     t = deck.table(slide)
     t.set_style("No Style, Table Grid", header=False, first_column=True)
     info = deck.tables(slide)[0]
-    assert info["style_name"] == "No Style, Table Grid"
-    assert (info["header"], info["banded"], info["first_column"]) == (False, True, True)
+    assert info.style_name == "No Style, Table Grid"
+    assert (info.header, info.banded, info.first_column) == (False, True, True)
 
 
 def test_editing_a_python_pptx_table():
@@ -166,8 +167,8 @@ def test_editing_a_python_pptx_table():
 def _deck_with_text():
     deck = PresentationDocument.new(layouts="basic")
     s1, s2, s3 = (deck.add_slide("Blank") for _ in range(3))
-    box = deck.add_textbox(s1, Inches(1), Inches(1), Inches(6), Inches(1),
-                           "See the docs, then the docs index")
+    box = deck.add_text_box(s1, "See the docs, then the docs index", x=Inches(1), y=Inches(1),
+                            width=Inches(6), height=Inches(1))
     return deck, (s1, s2, s3), box
 
 
@@ -180,38 +181,36 @@ def test_text_links_split_runs_and_share_one_relationship():
             for h in box.iter("{*}hlinkClick")}
     assert len(rids) == 1
     assert deck.links(s1) == [
-        {"shape": "TextBox 2", "text": "docs", "kind": "url",
-         "target": "https://example.org/docs", "tooltip": "Manual"}] * 2
+        Hyperlink("docs", target="https://example.org/docs", tooltip="Manual",
+                  shape="TextBox 2")] * 2
     assert _reload(deck).validate(level="full") == {}
 
 
 def test_a_link_across_runs_reads_as_one():
     deck, (s1, _, _), box = _deck_with_text()
     deck.set_link(s1, box, "mailto:team@example.org", text="See the docs")
-    assert [(lk["text"], lk["target"]) for lk in deck.links(s1)] == [
+    assert [(lk.text, lk.target) for lk in deck.links(s1)] == [
         ("See the docs", "mailto:team@example.org")]
 
 
 def test_shape_links_to_slides_and_show_jumps():
     deck, (s1, s2, s3), _ = _deck_with_text()
-    btn = deck.add_shape(s1, "rightArrow", Inches(1), Inches(3), Inches(2), Inches(1),
-                         text="Go")
+    btn = deck.add_shape(s1, "rightArrow", x=Inches(1), y=Inches(3), width=Inches(2),
+                         height=Inches(1), text="Go")
     deck.set_link(s1, btn, s3)
-    deck.set_link(s2, deck.add_shape(s2, "rect", 0, 0, Inches(1), Inches(1)), "next")
-    deck.set_link(s3, deck.add_shape(s3, "rect", 0, 0, Inches(1), Inches(1)), "first")
+    deck.set_link(s2, deck.add_shape(s2, "rect", x=0, y=0, width=Inches(1), height=Inches(1)), "next")
+    deck.set_link(s3, deck.add_shape(s3, "rect", x=0, y=0, width=Inches(1), height=Inches(1)), "first")
     again = _reload(deck)
     assert again.validate(level="full") == {}
     s1b, s2b, s3b = again.slides
-    assert [(lk["kind"], lk["target"], lk["text"]) for lk in again.links(s1b)] == [
-        ("slide", 3, None)]
-    assert again.links(s2b)[0] | {"shape": None} == {"shape": None, "text": None,
-                                                     "kind": "jump", "target": "next",
-                                                     "tooltip": None}
-    assert again.links(s3b)[0]["target"] == "first"
+    assert [(lk.kind, lk.anchor, lk.text) for lk in again.links(s1b)] == [("slide", 3, None)]
+    jump = again.links(s2b)[0]
+    assert (jump.text, jump.kind, jump.target, jump.tooltip) == (None, "jump", "next", None)
+    assert again.links(s3b)[0].target == "first"
     # by shape name, replacing and removing
     name = btn.find(".//{*}cNvPr").get("name")
     deck.set_link(s1, name, "https://example.org/")
-    assert [lk["kind"] for lk in deck.links(s1)] == ["url"]
+    assert [lk.kind for lk in deck.links(s1)] == ["url"]
     deck.set_link(s1, name, None)
     assert deck.links(s1) == []
 
@@ -234,7 +233,7 @@ def test_python_pptx_sees_oox_links():
     pptx = pytest.importorskip("pptx")
     deck, (s1, _, _), box = _deck_with_text()
     deck.set_link(s1, box, "https://example.org/docs", text="docs")
-    btn = deck.add_shape(s1, "rect", 0, 0, Inches(1), Inches(1), text="b")
+    btn = deck.add_shape(s1, "rect", x=0, y=0, width=Inches(1), height=Inches(1), text="b")
     deck.set_link(s1, btn, "https://example.org/button")
     buf = io.BytesIO()
     deck.save(buf)
@@ -251,8 +250,7 @@ def test_reading_python_pptx_links(tmp_path):
     path = next(f for f in _python_pptx(tmp_path) if "features" in f.name)
     deck = open_document(path)
     assert deck.links(deck.slides[2]) == [
-        {"shape": "Rounded Rectangle 2", "text": "rounded", "kind": "url",
-         "target": "https://example.org/", "tooltip": None}]
+        Hyperlink("rounded", target="https://example.org/", shape="Rounded Rectangle 2")]
 
 
 # -- sections ---------------------------------------------------------------------------
@@ -260,10 +258,12 @@ def test_sections_partition_the_slides_and_follow_new_slides():
     deck = PresentationDocument.new(layouts="basic")
     slides = [deck.add_slide("Blank") for _ in range(5)]
     deck.set_sections([("Intro", slides[1]), ("Results", 4)])
-    assert deck.sections() == [("Default Section", [1]), ("Intro", [2, 3]),
-                               ("Results", [4, 5])]
+    assert deck.sections() == [SlideSection("Default Section", [1]),
+                               SlideSection("Intro", [2, 3]), SlideSection("Results", [4, 5])]
     deck.add_slide("Blank")
-    assert deck.sections()[-1] == ("Results", [4, 5, 6])
+    assert deck.sections()[-1] == SlideSection("Results", [4, 5, 6])
+    deck.set_sections(deck.sections())          # what was read can be written again
+    assert [s.slides for s in deck.sections()] == [[1], [2, 3], [4, 5, 6]]
     again = _reload(deck)
     assert again.validate(level="full") == {}
     assert again.validate(target="Office2007") == {}

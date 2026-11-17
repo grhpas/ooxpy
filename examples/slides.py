@@ -32,15 +32,16 @@ def main(path: str, picture: str | None = None) -> None:
     deck.add_table(results, [["Region", "Q1", "Q2", "Q3"], ["North", 120, 135, 150],
                              ["South", 95, 110, 99], ["West", 80, 84, 91],
                              ["Total", None, None, 340]],
-                   Inches(1), Inches(1.8), Inches(8), merges=["A5:C5"])
+                   x=Inches(1), y=Inches(1.8), width=Inches(8), merges=["A5:C5"])
     deck.set_notes(results, "Totals are rounded to the nearest thousand.")
 
     process = deck.add_slide("Title Only")
     deck.set_placeholder_text(process, "title", "Next steps")
     for i, (label, fill) in enumerate([("Pilot", "4472C4"), ("Review", "5B9BD5"),
                                        ("Launch", "70AD47")]):
-        deck.add_shape(process, "chevron" if i else "homePlate", Inches(1 + i * 3.6),
-                       Inches(3), Inches(3.4), Inches(1.2), text=label, fill=fill, size=20)
+        deck.add_shape(process, "chevron" if i else "homePlate", x=Inches(1 + i * 3.6),
+                       y=Inches(3), width=Inches(3.4), height=Inches(1.2), text=label,
+                       fill=fill, size=20)
 
     if picture:
         photo = deck.add_slide("Picture with Caption")
@@ -52,7 +53,8 @@ def main(path: str, picture: str | None = None) -> None:
     deck.set_placeholder_text(trend, "title", "Trend")
     deck.add_chart(trend, "line", ["Q1", "Q2", "Q3"],
                    {"North": [120, 135, 150], "South": [95, 110, 99], "West": [80, 84, 91]},
-                   Inches(1), Inches(1.8), Inches(10), Inches(5), y_title="EUR k")
+                   x=Inches(1), y=Inches(1.8), width=Inches(10), height=Inches(5),
+                   y_title="EUR k")
 
     assert not deck.validate(target="Office2007")
     deck.save(path)

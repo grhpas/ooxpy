@@ -10,6 +10,7 @@ import pytest
 
 from oox import PresentationDocument, SpreadsheetDocument, WordprocessingDocument, images, open_document, teletype
 from oox.fieldcalc import format_date, tokens
+from oox.formatting import LineSpacing
 from oox.ns import w
 from oox.units import EMU_PER_INCH, Cm
 
@@ -82,7 +83,7 @@ def test_svg_needs_fallback_and_is_stored_with_it():
     blip = run.find(".//{http://schemas.openxmlformats.org/drawingml/2006/main}blip")
     svg = blip.find(".//{http://schemas.microsoft.com/office/drawing/2016/SVG/main}svgBlip")
     assert svg is not None
-    rels = doc.main_part.rels.items
+    rels = doc.main_part.rels
     rid_attr = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed"
     assert rels[blip.get(rid_attr)].target.endswith(".png")
     assert rels[svg.get(rid_attr)].target.endswith(".svg")
@@ -102,28 +103,36 @@ def test_svg_in_excel_and_powerpoint():
 # -- formatting --------------------------------------------------------------------------------
 def test_runs_paragraph_format_and_resolution():
     doc = WordprocessingDocument.new()
-    doc.add_style("Note", italic=True, color="595959", space_before=6, indent_left=720)
+    doc.add_style("Note", italic=True, color="595959", space_before=6, indent_left=36)
     doc.add_style("Code Char", kind="character", font="Courier New", size=10)
     p = doc.add_paragraph("", style="Note")
     bold = doc.add_run(p, "Warning: ", bold=True, color="#c00000")
     code = doc.add_run(p, "x", style="Code Char")
-    doc.format_paragraph(p, align="center", space_after=12, first_line=-360, line_spacing="14pt")
-    f = doc.effective_format(p, bold)
-    assert (f["bold"], f["italic"], f["color"], f["style"]) == (True, True, "C00000", "Note")
-    assert (f["align"], f["space_before"], f["space_after"]) == ("center", 6.0, 12.0)
-    assert (f["indent_left"], f["first_line"], f["line_spacing"]) == (720, -360, "14pt")
-    g = doc.effective_format(p, code)
-    assert (g["font"], g["size"], g["color"], g["bold"]) == ("Courier New", 10.0, "595959", False)
+    doc.format_paragraph(p, align="center", space_after=12, first_line=-18,
+                         line_spacing=LineSpacing.exactly(14))
+    fmt = doc.formatting()
+    f = fmt.run(bold)
+    assert (f.bold, f.italic, f.color, f.style) == (True, True, "C00000", None)
+    pf = fmt.paragraph(p)
+    assert (pf.style, pf.align, pf.space_before, pf.space_after) == ("Note", "center", 6.0, 12.0)
+    assert (pf.indent_left, pf.first_line) == (36.0, -18.0)
+    assert pf.line_spacing == LineSpacing("exact", 14.0)
+    g = fmt.run(code)
+    assert (g.font, g.size, g.color, g.bold, g.style) == ("Courier New", 10.0, "595959", False,
+                                                         "Code Char")
+    assert doc.effective_format(p, code) == g
     assert not doc.validate(target="Office2007")
 
 
 def test_defaults_and_theme_fonts_resolve():
     doc = WordprocessingDocument.new()
-    body = doc.effective_format(doc.add_paragraph("x"))
-    assert (body["font"], body["size"], body["style"], body["space_after"]) == \
-        ("Calibri", 11.0, "Normal", 8.0)
-    head = doc.effective_format(doc.add_heading("H", 1))
-    assert head["font"] == "Calibri Light" and head["keep_with_next"] is True
+    fmt = doc.formatting()
+    p = doc.add_paragraph("x")
+    body, mark = doc.formatting().paragraph(p), doc.effective_format(p)
+    assert (mark.font, mark.size, body.style, body.space_after) == ("Calibri", 11.0, "Normal", 8.0)
+    h = doc.add_heading("H", 1)
+    fmt = doc.formatting()
+    assert fmt.mark(h).font == "Calibri Light" and fmt.paragraph(h).keep_with_next is True
 
 
 def test_toggle_off_and_errors():
@@ -131,7 +140,7 @@ def test_toggle_off_and_errors():
     doc.add_style("Loud", bold=True)
     p = doc.add_paragraph("", style="Loud")
     r = doc.add_run(p, "quiet", bold=False)
-    assert doc.effective_format(p, r)["bold"] is False
+    assert doc.effective_format(p, r).bold is False
     with pytest.raises(TypeError):
         doc.add_run(p, "x", boldd=True)
     with pytest.raises(ValueError):
@@ -221,7 +230,7 @@ def test_seq_switches_and_ref_errors():
                  "SEQ X \\h", "REF nowhere", "PAGEREF nowhere"):
         doc.add_field(p, code, result="?")
     doc.update_fields()
-    assert [f["result"] for f in doc.fields()] == [
+    assert [f.result for f in doc.fields()] == [
         "I", "b", "2", "10", "", "Error! Reference source not found.",
         "Error! Bookmark not defined."]
 
@@ -239,7 +248,7 @@ def test_property_fields_and_dates():
                  "AUTHOR"):
         doc.add_field(p, code, result="old")
     doc.update_fields(now=dt.datetime(2026, 3, 4))
-    assert [f["result"] for f in doc.fields()] == ["T", "co", "N", "3", "2026-01-02",
+    assert [f.result for f in doc.fields()] == ["T", "co", "N", "3", "2026-01-02",
                                                    "4 Mar", "old"]  # no author set: kept
 
 
@@ -253,23 +262,23 @@ def test_page_estimates_from_breaks_and_rendered_breaks():
     p = doc.add_paragraph("")
     doc.add_cross_reference(p, cap, what="page")
     doc.add_cross_reference(p, later, what="page")
-    assert [f["result"] for f in doc.fields() if f["name"] == "PAGEREF"] == ["1", "3"]
+    assert [f.result for f in doc.fields() if f.name == "PAGEREF"] == ["1", "3"]
     # a Word-laid-out file: lastRenderedPageBreak markers win
     doc2 = WordprocessingDocument.new()
     doc2.body.add(w.P(w.R(w.LastRenderedPageBreak(), w.T("p2"))))
     c2 = doc2.add_caption("x")
     q = doc2.add_paragraph("")
     doc2.add_cross_reference(q, c2, what="page")
-    assert doc2.fields()[-1]["result"] == "2"
+    assert doc2.fields()[-1].result == "2"
 
 
 def test_complex_results_spanning_paragraphs_are_left_alone():
     doc = WordprocessingDocument.new()
     doc.add_heading("A", 1)
     doc.add_toc()
-    before = [f["result"] for f in doc.fields()]
+    before = [f.result for f in doc.fields()]
     doc.update_fields()
-    assert [f["result"] for f in doc.fields()] == before
+    assert [f.result for f in doc.fields()] == before
 
 
 # -- content controls ---------------------------------------------------------------------------------
@@ -285,16 +294,16 @@ def form():
 
 def test_controls_read_fill_and_round_trip():
     doc = form()
-    assert [(c["tag"], c["type"], c["value"]) for c in doc.content_controls()] == [
+    assert [(c.tag, c.type, c.value) for c in doc.content_controls()] == [
         ("name", "text", None), ("dept", "dropdown", None), ("office", "combo", None),
         ("start", "date", None), ("ok", "checkbox", False)]
     assert doc.fill_controls({"name": "Ada", "dept": "FIN", "office": "Lisbon",
                               "start": dt.date(2026, 11, 14), "ok": True}) == 5
-    back = {c["tag"]: c for c in reopen(doc).content_controls()}
-    assert back["name"]["value"] == "Ada" and not back["name"]["placeholder"]
-    assert back["dept"]["value"] == "Finance" and back["office"]["value"] == "Lisbon"
-    assert back["start"]["value"] == "14/11/2026" and back["start"]["date"] == dt.date(2026, 11, 14)
-    assert back["ok"]["value"] is True
+    back = {c.tag: c for c in reopen(doc).content_controls()}
+    assert back["name"].value == "Ada" and not back["name"].placeholder
+    assert back["dept"].value == "Finance" and back["office"].value == "Lisbon"
+    assert back["start"].value == "14/11/2026" and back["start"].date == dt.date(2026, 11, 14)
+    assert back["ok"].value is True
     assert not doc.validate(target="Office2007")
     # placeholder style is dropped once filled
     sdt = next(doc.document.iter(W + "sdt"))

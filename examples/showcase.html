@@ -21,7 +21,7 @@
 The snippets use <code>chart.png</code>; any PNG, JPEG, GIF or BMP will do.</p>
 
 <h2>Sizes</h2>
-<p>Drawings are measured in EMU (914,400 per inch). Use the helpers from
+<p>Sizes and positions are points, as in Office's dialogs, or a length from
 <code>oox.units</code>: <code>Inches</code>, <code>Cm</code>, <code>Mm</code>,
 <code>Pt</code>, <code>Px</code>. When placing a picture, give one dimension and the
 other follows the aspect ratio; give none for the picture's natural size (from its DPI).</p>
@@ -63,9 +63,9 @@ deck.set_placeholder_text(title, "title", "Regional sales")
 deck.set_placeholder_text(title, "subtitle", "Q3 review")
 
 slide = deck.add_slide()                              # "Blank"
-deck.add_textbox(slide, Inches(0.7), Inches(0.5), Inches(12), Inches(1),
-                 "Units by region", size=36, bold=True, color="1F3864")
-deck.add_picture(slide, "chart.png", Inches(1), Inches(1.8), width=Inches(6))
+deck.add_text_box(slide, "Units by region", x=Inches(0.7), y=Inches(0.5), width=Inches(12),
+                  height=Inches(1), size=36, bold=True, color="1F3864")
+deck.add_picture(slide, "chart.png", x=Inches(1), y=Inches(1.8), width=Inches(6))
 deck.save("sales.pptx")</code></pre>
 
 <h2>Word</h2>

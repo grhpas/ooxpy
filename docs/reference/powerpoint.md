@@ -14,8 +14,8 @@ Base class.  Subclasses set `MAIN_CONTENT_TYPES` and implement `new`.
 
 ```python
 new(
-    width: int = 12192000,
-    height: int = 6858000,
+    width: float = 12192000,
+    height: float = 6858000,
     kind: str = '.pptx',
     layouts: str = 'standard',
 ) -> PresentationDocument
@@ -23,7 +23,8 @@ new(
 
 *classmethod*
 
-New deck (default 13.333 x 7.5 in, i.e. 16:9) with master, theme and
+New deck (default 13.333 x 7.5 in, i.e. 16:9; size in points or
+`Length`) with master, theme and
 Office's eleven standard layouts (Title Slide, Title and Content, Section
 Header, Two Content, Comparison, Title Only, Blank, Content with Caption,
 Picture with Caption, Title and Vertical Text, Vertical Title and Text);
@@ -97,15 +98,32 @@ slide_layout(slide: OoxElement) -> str
 
 Name of the layout a slide is based on.
 
+#### `slide_size`
+
+*read-only property*
+
+(width, height) of the slides in points.
+
+#### `content_area`
+
+```python
+content_area(slide: OoxElement) -> tuple[float, float, float, float]
+```
+
+(x, y, width, height) in points of the slide's content area: the body
+placeholder of its master (where "Title and Content" puts its text).
+Shapes, tables, charts and pictures go there when no position is given.
+
 ### Placeholders
 
 #### `placeholders`
 
 ```python
-placeholders(slide: OoxElement) -> list[tuple[str, int, OoxElement]]
+placeholders(slide: OoxElement) -> list[Placeholder]
 ```
 
-`(type, idx, shape)` for each placeholder on a slide (or layout).
+A `Placeholder` (type, idx, name, element) for each placeholder on a
+slide (or layout).
 
 #### `placeholder`
 
@@ -149,17 +167,17 @@ Fill a picture (or content) placeholder, cropped to fill like PowerPoint.
 
 ### Text boxes, shapes and pictures
 
-#### `add_textbox`
+#### `add_text_box`
 
 ```python
-add_textbox(
+add_text_box(
     slide: OoxElement,
-    x: int,
-    y: int,
-    cx: int,
-    cy: int,
     text: str,
     *,
+    x: float | None = None,
+    y: float | None = None,
+    width: float | None = None,
+    height: float | None = None,
     size: float | None = None,
     bold: bool = False,
     color: str | None = None,
@@ -168,8 +186,14 @@ add_textbox(
 ) -> OoxElement
 ```
 
-Add a text box; `\n` starts a new paragraph.  `size` in points,
-`color` as hex RGB, `align` one of left/center/right/justify.
+Add a text box; `
+` starts a new paragraph.  Position and size in
+
+```python
+    points (or `Length`), by default the content area's top, as wide as
+    it and as tall as the text; `size` in points, `color` as hex RGB,
+    `align` one of left/center/right/justify.
+```
 
 #### `add_shape`
 
@@ -177,15 +201,17 @@ Add a text box; `\n` starts a new paragraph.  `size` in points,
 add_shape(
     slide: OoxElement,
     shape: str,
-    x: int,
-    y: int,
-    cx: int,
-    cy: int,
+    *,
+    x: float | None = None,
+    y: float | None = None,
+    width: float | None = None,
+    height: float | None = None,
     **options,
 ) -> OoxElement
 ```
 
-An auto shape with fill, line and text; see `oox.slides.add_shape`.
+An auto shape with fill, line and text; position and size in points
+(or `Length`), by default the content area.  See `oox.slides.add_shape`.
 
 **Options** (keywords)
 
@@ -203,7 +229,8 @@ name: str | None = None
 
 An auto shape (`shape` = preset geometry: rect, roundRect, ellipse,
 rightArrow, chevron, ...).  `fill`/`line` as hex RGB or `None`;
-`line_width` in points; text centred and white by default.
+`line_width` in points; text centred and white by default.  `box` is
+(x, y, cx, cy) in EMU (`deck.add_shape` takes points).
 
 #### `add_picture`
 
@@ -211,26 +238,29 @@ rightArrow, chevron, ...).  `fill`/`line` as hex RGB or `None`;
 add_picture(
     slide: OoxElement,
     image,
-    x: int = 914400,
-    y: int = 914400,
     *,
-    width: int | None = None,
-    height: int | None = None,
+    x: float | None = None,
+    y: float | None = None,
+    width: float | None = None,
+    height: float | None = None,
     descr: str = '',
     fallback=None,
 ) -> OoxElement
 ```
 
-Place a picture on a slide.  Size in EMU; one dimension keeps the
-aspect ratio.  An SVG needs `fallback=` (a PNG) for Office before 2016.
+Place a picture on a slide.  Position and size in points (or
+`Length`); by default at the content area's top left, at the image's
+natural size; one dimension keeps the aspect ratio.  An SVG needs
+`fallback=` (a PNG) for Office before 2016.
 
 #### `shapes`
 
 ```python
-shapes(slide: OoxElement) -> list[dict]
+shapes(slide: OoxElement) -> list[Shape]
 ```
 
-What a slide holds; see `oox.slides.shapes`.
+A `Shape` for each thing on the slide, with position and size in points;
+see `oox.slides.shapes`.
 
 **Details** (from `oox.slides`)
 
@@ -238,13 +268,13 @@ Slide content beyond text boxes: shapes with fills, tables, speaker notes,
 picture placeholders, and a reader for what a slide holds.
 
 ```python
-deck.add_shape(slide, "roundRect", Inches(1), Inches(2), Inches(3), Inches(1),
+deck.add_shape(slide, "roundRect", x=72, y=144, width=216, height=72,
                text="Step 1", fill="2F5496")
-deck.add_table(slide, [["Region", "Q1"], ["North", 120]], Inches(1), Inches(3.5),
-               Inches(6), style="Medium Style 2 - Accent 1")
+deck.add_table(slide, [["Region", "Q1"], ["North", 120]], y=Inches(3.5),
+               width=Inches(6), style="Medium Style 2 - Accent 1")
 deck.set_notes(slide, "Mention the North region first.")
 deck.set_placeholder_picture(slide, "pic", "photo.jpg")   # crops to fill, like PowerPoint
-deck.shapes(slide)    # [{"kind": "table", "name": ..., "text": ...}, ...]
+deck.shapes(slide)    # [Shape(kind="table", name=..., text=...), ...]
 ```
 
 Tables use PowerPoint's built-in table styles, referenced by GUID
@@ -259,15 +289,18 @@ which is created on first use (decks from PowerPoint usually have one).
 add_table(
     slide: OoxElement,
     rows,
-    x: int,
-    y: int,
-    cx: int = 7315200,
-    cy: int | None = None,
+    *,
+    x: float | None = None,
+    y: float | None = None,
+    width: float | None = None,
+    height: float | None = None,
     **options,
 ) -> OoxElement
 ```
 
-A table in a built-in PowerPoint style; see `oox.slides.add_table`.
+A table in a built-in PowerPoint style; position and size in points
+(or `Length`): by default at the content area's top left, as wide as
+it, rows of `row_height`.  See `oox.slides.add_table`.
 
 **Options** (keywords)
 
@@ -276,8 +309,8 @@ header: bool = True
 banded: bool = True
 first_column: bool = False
 style: str | None = 'Medium Style 2 - Accent 1'
-col_widths: list[int] | None = None
-row_height: int = 365760
+widths: list[float] | None = None
+row_height: float = 365760
 size: float | None = None
 merges=()
 name: str | None = None
@@ -287,17 +320,18 @@ A table from a list of rows (values become text; `None` is empty).
 
 `style` is a name from `TABLE_STYLES` or a GUID; `header`,
 `banded`, `first_column` switch the style's options.  `merges` are
-`"A1:B1"`-style ranges (columns A.., rows 1..).  `cy` defaults to
-rows x `row_height`.  Returns the `p:graphicFrame`.
+`"A1:B1"`-style ranges (columns A.., rows 1..).  `box` is (x, y, cx,
+cy) in EMU, cy None for rows x `row_height`; `widths` (per column) and
+`row_height` in points or `Length`.  Returns the `p:graphicFrame`.
 
 #### `tables`
 
 ```python
-tables(slide: OoxElement) -> list[dict]
+tables(slide: OoxElement) -> list[SlideTableInfo]
 ```
 
-`{"name", "rows", "merges", ...}` for each table on the slide
-(`deck.table(slide, i)` edits one).
+A `SlideTableInfo` (name, rows, merges, style ...) for each table on the
+slide (`deck.table(slide, i)` edits one).
 
 #### `table`
 
@@ -337,17 +371,18 @@ add_chart(
     kind: str,
     categories,
     series,
-    x: int = 914400,
-    y: int = 1371600,
-    cx: int = 7315200,
-    cy: int = 4114800,
     *,
+    x: float | None = None,
+    y: float | None = None,
+    width: float | None = None,
+    height: float | None = None,
     name: str | None = None,
     **options,
 ) -> OoxElement
 ```
 
-Place a chart on a slide; returns its `p:graphicFrame`.
+Place a chart on a slide; returns its `p:graphicFrame`.  Position
+and size in points (or `Length`), by default the content area.
 
 `series` is `{"North": [1, 2, 3], ...}` (or `oox.charts.Series`
 objects); the data also goes into an embedded workbook ("Edit Data").
@@ -356,10 +391,10 @@ Options are those of `oox.charts.build_chart`.
 #### `charts`
 
 ```python
-charts(slide: OoxElement) -> list[dict]
+charts(slide: OoxElement) -> list[Chart]
 ```
 
-Charts on a slide, in order: `oox.charts.chart_info` plus "rid".
+A `Chart` (`oox.records`) for each chart on the slide, in order.
 
 ### Notes, links and sections
 
@@ -419,10 +454,10 @@ external relationships, slide jumps relationships to the slide part with the
 #### `links`
 
 ```python
-links(slide: OoxElement) -> list[dict]
+links(slide: OoxElement) -> list[Hyperlink]
 ```
 
-The slide's click links; see `oox.slidelinks.links`.
+A `Hyperlink` for each click link on the slide; see `oox.slidelinks.links`.
 
 #### `set_sections`
 
@@ -431,7 +466,8 @@ set_sections(sections) -> None
 ```
 
 Slide sections: `[(name, first slide), ...]` (slide elements or
-1-based numbers); `[]` removes them.  See `oox.sections_pml`.
+1-based numbers) or `SlideSection` records as `sections()` reads them;
+`[]` removes them.  See `oox.sections_pml`.
 
 **Details** (from `oox.sections_pml`)
 
@@ -440,7 +476,7 @@ in the presentation's extension list.
 
 ```python
 deck.set_sections([("Introduction", s1), ("Results", s4)])
-deck.sections()          # [("Introduction", [1, 2, 3]), ("Results", [4, 5])]
+deck.sections()          # [SlideSection("Introduction", [1, 2, 3]), ...]
 deck.set_sections([])    # remove them
 ```
 
@@ -453,10 +489,10 @@ from the names and positions, so the same sections give the same bytes.
 #### `sections`
 
 ```python
-sections() -> list[tuple[str, list[int]]]
+sections() -> list[SlideSection]
 ```
 
-`[(name, [slide numbers]), ...]`.
+A `SlideSection` (name, slide numbers) per section.
 
 ## `SlideTable`
 
@@ -469,14 +505,14 @@ add_column(
     values: list[Any] | None = None,
     *,
     index: int | None = None,
-    width: int | None = None,
+    width: float | None = None,
     like: int | None = None,
 ) -> None
 ```
 
 Insert a column before `index` (default: at the end), formatted
-like column `like` (default: the one left of it); `width` in EMU
-(default: that column's).  The frame grows by the width.
+like column `like` (default: the one left of it); `width` in points
+or `Length` (default: that column's).  The frame grows by the width.
 
 ### `add_row`
 
@@ -589,10 +625,10 @@ paragraph's alignment are kept unless given.
 ### `set_widths`
 
 ```python
-set_widths(widths: list[int]) -> None
+set_widths(widths: list[float]) -> None
 ```
 
-Column widths in EMU; the frame's width follows.
+Column widths in points (or `Length`); the frame's width follows.
 
 ### `text`
 
@@ -622,4 +658,4 @@ Text per grid position; cells covered by a merge are `None`.
 
 *read-only property*
 
-Column widths in EMU.
+Column widths in points.

@@ -17,7 +17,7 @@ def report(path: Path) -> None:
     doc.extended_properties.company = "Example Ltd"
     doc.custom_properties["Quarter"] = "Q3"
 
-    doc.add_style("Note", italic=True, color="595959", indent_left=720, space_before=6)
+    doc.add_style("Note", italic=True, color="595959", indent_left=36, space_before=6)
 
     title = doc.add_paragraph("")
     doc.add_field(title, "TITLE")                    # filled from the properties
@@ -58,7 +58,7 @@ def fill(template: Path, out: Path, data: dict) -> None:
     doc = open_document(template)
     doc.fill_controls(data)
     doc.save(out)
-    print({c["tag"]: c["value"] for c in doc.content_controls()})
+    print({c.tag: c.value for c in doc.content_controls()})
 
 
 def main(outdir: str) -> None:

@@ -9,6 +9,7 @@ import zipfile
 import pytest
 
 from oox import SpreadsheetDocument, open_document
+from oox.records import CellFormat, Comment, ExcelTable, SheetOptions
 from oox.spreadsheet import Formula
 from oox.xlprint import _hf_code, _hf_text, excel_password_hash
 
@@ -48,16 +49,29 @@ def test_every_rule_kind_validates_and_reads_back():
                             style={"border": "thin", "border_color": "FF0000"}, stop=True)
     assert not book.validate(target="Office2007")
     rules = reopen(book).conditional_formats("S")
-    assert [r["priority"] for r in rules] == list(range(1, 13))
-    by_type = {r["type"]: r for r in rules}
-    assert rules[0]["operator"] == "greaterThanOrEqual" and rules[0]["style"] == \
-        {"color": "9C0006", "fill": "FFC7CE"}
-    assert rules[1]["formulas"] == ["10", "50"] and rules[2]["formulas"] == ['"North"']
-    assert by_type["colorScale"]["colors"] == ["FFFFFF", "63BE7B"]
-    assert by_type["iconSet"]["icons"] == "5Rating"
-    assert by_type["beginsWith"]["formulas"] == ['LEFT(A2,6)="Sou""th"']
-    assert by_type["expression"]["range"] == "A2:C4 E2:E4"
-    assert by_type["expression"]["formulas"] == ["$C2>$B2"]
+    assert [r.priority for r in rules] == list(range(1, 13))
+    assert [r.rule for r in rules] == ["cell", "cell", "cell", "color_scale", "data_bar",
+                                       "icon_set", "bottom", "above_average", "unique", "text",
+                                       "blanks", "formula"]
+    by_type = {r.type: r for r in rules}
+    assert (rules[0].operator, rules[0].value) == (">=", 100)
+    assert rules[0].style == CellFormat(color="9C0006", fill="FFC7CE")
+    assert (rules[1].operator, rules[1].values) == ("not between", [10, 50])
+    assert rules[1].formulas == ["10", "50"] and rules[2].value == "North"
+    assert by_type["colorScale"].colors == ["FFFFFF", "63BE7B"]
+    assert by_type["iconSet"].icons == "5Rating"
+    assert (rules[6].n, rules[6].percent) == (10, True)
+    assert (rules[9].how, rules[9].text) == ("begins", 'Sou"th')
+    assert by_type["beginsWith"].formulas == ['LEFT(A2,6)="Sou""th"']
+    formula = by_type["expression"]
+    assert (formula.ref, formula.formula, formula.stop) == ("A2:C4 E2:E4", "=$C2>$B2", True)
+    # a rule read back can be written again
+    copy = data_book()
+    for r in rules[:3]:
+        copy.conditional_format("S", r.ref, r.rule, operator=r.operator, value=r.value,
+                                values=r.values, style=r.style.as_dict() if r.style else None)
+    assert [(r.operator, r.value) for r in copy.conditional_formats("S")] == [
+        (">=", 100), ("not between", None), ("=", "North")]
 
 
 def test_highlight_styles_are_shared_dxfs():
@@ -91,8 +105,9 @@ def test_table_with_totals_and_structured_reference():
     book.set_value("S", "F1", Formula("SUM(Sales[Sales])", 230))
     back = reopen(book)
     (t,) = back.tables("S")
-    assert t == {"name": "Sales", "ref": "A1:D5", "columns": ["Region", "Sales", "Margin",
-                 "Column4"], "style": "TableStyleMedium2", "totals": True, "header": True}
+    assert t == ExcelTable(name="Sales", ref="A1:D5",
+                           columns=["Region", "Sales", "Margin", "Column4"],
+                           style="TableStyleMedium2", totals_row=True)
     assert back.value("S", "D1") == "Column4"  # header written into the cell
     assert [back.value("S", r) for r in ("A5", "B5", "C5", "D5")] == [
         "Total", 230, pytest.approx(23.3333333), 0]
@@ -104,7 +119,7 @@ def test_table_with_totals_and_structured_reference():
 def test_table_names_and_overlaps():
     book = data_book()
     book.add_table("S", "A1:C4")
-    assert book.tables("S")[0]["name"] == "Table1"
+    assert book.tables("S")[0].name == "Table1"
     with pytest.raises(ValueError):
         book.add_table("S", "B3:D6")
     book.set_value("S", "F1", "h")
@@ -118,7 +133,7 @@ def test_table_names_and_overlaps():
     with pytest.raises(ValueError):
         book.add_table("S", "F1:F2", totals={"Nope": "sum"})
     book.add_table("S", "F1:F2", name="Other", style=None)
-    assert [t["style"] for t in book.tables("S")] == ["TableStyleMedium2", None]
+    assert [t.style for t in book.tables("S")] == ["TableStyleMedium2", None]
 
 
 def test_duplicate_headers_get_unique_names():
@@ -126,7 +141,7 @@ def test_duplicate_headers_get_unique_names():
     book.append_row("S", ["x", "X", ""])
     book.append_row("S", [1, 2, 3])
     book.add_table("S", "A1:C2")
-    assert book.tables("S")[0]["columns"] == ["x", "Column2", "Column3"]
+    assert book.tables("S")[0].columns == ["x", "Column2", "Column3"]
 
 
 # -- comments and hyperlinks ---------------------------------------------------------------------
@@ -138,8 +153,9 @@ def test_comments_on_two_sheets_with_replacement():
     book.add_comment("S", "B2", "second", author="Ada")
     book.add_comment("T", "C3", "other sheet", author="Bob")
     back = reopen(book)
-    assert back.comments("S") == {"A1": ("oox", "visible\nnote"), "B2": ("Ada", "second")}
-    assert back.comments("T") == {"C3": ("Bob", "other sheet")}
+    assert {ref: (c.author, c.text) for ref, c in back.comments("S").items()} == {
+        "A1": ("oox", "visible\nnote"), "B2": ("Ada", "second")}
+    assert back.comments("T") == {"C3": Comment("other sheet", author="Bob", cell="C3")}
     z = zipfile.ZipFile(io.BytesIO(_bytes(book)))
     vml = z.read("xl/drawings/vmldrawing1.vml").decode()
     assert vml.count("<v:shape ") == 2 and vml.count("<x:Visible/>") == 1
@@ -170,9 +186,12 @@ def test_hyperlinks_external_and_internal():
     book.add_hyperlink("S", "A7", "#T!A1", text="Go")
     book.add_hyperlink("S", "A6", "https://example.org/", text="Replaced")
     back = reopen(book)
-    assert back.hyperlinks("S") == {"A6": "https://example.org/", "A7": "#T!A1"}
+    links = back.hyperlinks("S")
+    assert {ref: link.target for ref, link in links.items()} == {
+        "A6": "https://example.org/", "A7": "#T!A1"}
+    assert (links["A7"].kind, links["A6"].cell) == ("location", "A6")
     assert back.value("S", "A6") == "Replaced"
-    assert back.cell_format("S", "A6")["underline"] is True
+    assert back.cell_format("S", "A6").underline is True
     assert not book.validate(target="Office2007")
 
 
@@ -202,23 +221,27 @@ def test_header_footer_codes():
 
 def test_page_setup_round_trip():
     book = data_book()
-    book.page_setup("S", orientation="landscape", paper="A4", fit_width=1, scale=90,
+    book.set_page_setup("S", orientation="landscape", paper="A4", fit_width=1, scale=90,
                     print_area="A1:C4", repeat_rows="1:1", repeat_cols="A:A",
                     header="Report", footer={"right": "Page {page}"}, gridlines=True,
-                    margins={"left": 0.5}, center_horizontally=True)
-    info = reopen(book).page_setup_info("S")
-    assert (info["orientation"], info["paper"], info["fit_width"], info["scale"]) == \
+                    margins={"left": 36}, center_horizontally=True)
+    back = reopen(book)
+    info = back.page_setup("S")
+    assert (info.orientation, info.paper, info.fit_width, info.scale) == \
         ("landscape", "a4", 1, 90)
-    assert info["margins"]["left"] == 0.5 and info["margins"]["top"] == 0.75
-    assert info["print_area"] == "S!$A$1:$C$4"
-    assert info["print_titles"] == "S!$A:$A,S!$1:$1"
-    assert info["header"] == {"center": "Report"} and info["footer"] == {"right": "Page {page}"}
-    assert info["gridlines"] is True
+    assert info.margins["left"] == 36 and info.margins["top"] == 54   # 0.75 in
+    assert back.sheet("S").first("x:pageMargins").get("left") == "0.5"
+    assert (info.print_area, info.repeat_rows, info.repeat_cols) == ("A1:C4", "1:1", "A:A")
+    assert info.header == {"center": "Report"} and info.footer == {"right": "Page {page}"}
+    assert (info.gridlines, info.center_horizontally) == (True, True)
+    other = data_book()                      # what was read can be written again
+    other.set_page_setup("S", **info.as_dict())
+    assert other.page_setup("S") == info
     assert not book.validate(target="Office2007")
     with pytest.raises(ValueError):
-        book.page_setup("S", orientation="sideways")
+        book.set_page_setup("S", orientation="sideways")
     with pytest.raises(ValueError):
-        book.page_setup("S", paper="A9")
+        book.set_page_setup("S", paper="A9")
 
 
 def test_sheet_options_hidden_and_protection():
@@ -226,29 +249,29 @@ def test_sheet_options_hidden_and_protection():
     assert excel_password_hash("secret") == "DAA7"  # LibreOffice wrote the same
     book = data_book()
     book.add_sheet("Lookup")
-    book.sheet_options("S", tab_color="#2f5496", zoom=120, gridlines=False)
-    book.sheet_options("Lookup", hidden="very")
+    book.set_sheet_options("S", tab_color="#2f5496", zoom=120, gridlines=False)
+    book.set_sheet_options("Lookup", hidden="very")
     with pytest.raises(ValueError):
-        book.sheet_options("S", hidden=True)  # the last visible sheet
+        book.set_sheet_options("S", hidden=True)  # the last visible sheet
     book.protect_sheet("S", password="secret", allow=("sort",))
     back = reopen(book)
-    assert back.sheet_options_info("S") == {"tab_color": "2F5496", "hidden": False,
-                                            "protected": True, "zoom": 120, "gridlines": False}
-    assert back.sheet_options_info("Lookup")["hidden"] == "very"
+    assert back.sheet_options("S") == SheetOptions(tab_color="2F5496", hidden=False,
+                                                   protected=True, zoom=120, gridlines=False)
+    assert back.sheet_options("Lookup").hidden == "very"
     prot = back.sheet("S").first("x:sheetProtection")
     assert prot.get("password") == "DAA7" and prot.get("sort") in ("0", "false")
     back.unprotect_sheet("S")
-    back.sheet_options("Lookup", hidden=False)
-    back.sheet_options("S", tab_color="")
-    assert back.sheet_options_info("S")["protected"] is False
-    assert back.sheet_options_info("Lookup")["hidden"] is False
-    assert back.sheet_options_info("S")["tab_color"] is None
+    back.set_sheet_options("Lookup", hidden=False)
+    back.set_sheet_options("S", tab_color="")
+    assert back.sheet_options("S").protected is False
+    assert back.sheet_options("Lookup").hidden is False
+    assert back.sheet_options("S").tab_color is None
     assert not book.validate(target="Office2007")
 
 
 def test_hiding_the_active_sheet_moves_the_active_tab():
     book = SpreadsheetDocument.new("A")
     book.add_sheet("B")
-    book.sheet_options("A", hidden=True)
+    book.set_sheet_options("A", hidden=True)
     view = book.workbook.first("x:bookViews").first("x:workbookView")
     assert view.get("activeTab") == "1"

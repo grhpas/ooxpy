@@ -2,7 +2,7 @@
 
     run = doc.add_text_box("Note\\nSecond paragraph", width=Cm(6), height=Cm(3),
                            x=Cm(10), y=0, wrap="square", fill="FFF2CC")
-    doc.text_boxes()          # [{"text": "Note\\nSecond paragraph", ...}]
+    doc.text_boxes()          # [TextBox(text="Note\\nSecond paragraph", ...)]
     doc.set_text_box_text(0, "New text")
 
 Each text box is an ``mc:AlternateContent`` in a run: the choice is a
@@ -22,7 +22,7 @@ from lxml import etree  # pyright: ignore[reportAttributeAccessIssue]
 from . import drawing
 from .element import OoxElement
 from .grammar import URI
-from .units import Cm
+from .units import DRAWING_LIMIT, Cm, emu
 
 if TYPE_CHECKING:
     from .document import WordprocessingDocument
@@ -61,8 +61,8 @@ def _content(text_or_paragraphs: Any) -> list[OoxElement]:
     return items
 
 
-def add_text_box(doc: WordprocessingDocument, content: Any = "", *, width: int = Cm(6),
-                 height: int = Cm(3), x: int = 0, y: int = 0, h_relative: str = "column",
+def add_text_box(doc: WordprocessingDocument, content: Any = "", *, width: float = Cm(6),
+                 height: float = Cm(3), x: float = 0, y: float = 0, h_relative: str = "column",
                  v_relative: str = "paragraph", h_align: str | None = None,
                  v_align: str | None = None, wrap: str = "square",
                  fill: str | None = "FFFFFF", line: str | None = "000000",
@@ -71,8 +71,8 @@ def add_text_box(doc: WordprocessingDocument, content: Any = "", *, width: int =
     """A floating text box; returns the ``w:r`` holding it.
 
     ``content`` is text (``\\n`` starts a paragraph) or a list of ``w:p``/
-    ``w:tbl`` elements (or ``Table`` objects); they are copied in.  ``x``/``y``
-    are EMU offsets from ``h_relative`` (column, page, margin, character) and
+    ``w:tbl`` elements (or ``Table`` objects); they are copied in.  Sizes and
+    offsets in points (or ``Length``); ``x``/``y`` are offsets from ``h_relative`` (column, page, margin, character) and
     ``v_relative`` (paragraph, page, margin, line); ``h_align`` (left, center,
     right, inside, outside) and ``v_align`` (top, center, bottom, inside,
     outside) replace them.  ``fill``/``line`` are hex colours or None,
@@ -86,6 +86,8 @@ def add_text_box(doc: WordprocessingDocument, content: Any = "", *, width: int =
         raise ValueError(f"h_relative: {sorted(H_RELATIVE)}; v_relative: {sorted(V_RELATIVE)}")
     if h_align not in (None, *H_ALIGN) or v_align not in (None, *V_ALIGN):
         raise ValueError(f"h_align: {H_ALIGN}; v_align: {V_ALIGN}")
+    width, height = emu(width, "width", DRAWING_LIMIT), emu(height, "height", DRAWING_LIMIT)
+    x, y = emu(x, "x", DRAWING_LIMIT), emu(y, "y", DRAWING_LIMIT)
     paragraphs = _content(content)
     n = drawing.max_shape_id(doc.document) + 1
     name = name or f"Text Box {n}"
@@ -185,16 +187,18 @@ def _boxes(doc: WordprocessingDocument) -> list[list[OoxElement]]:
     return out
 
 
-def text_boxes(doc: WordprocessingDocument) -> list[dict]:
-    """Text boxes in the body, once each: ``{"text", "paragraphs", "vml_only"}``."""
+def text_boxes(doc: WordprocessingDocument) -> list:
+    """A ``TextBox`` (text, paragraphs, vml_only) for each text box in the
+    body, once each."""
     from . import teletype
+    from .records import TextBox
 
     out = []
     for copies in _boxes(doc):
         first = copies[0]
         paras = ["".join(teletype.extractText(p)) for p in first.iterchildren(f"{{{W}}}p")]
-        out.append({"text": "\n".join(paras), "paragraphs": len(paras),
-                    "vml_only": all(c.getparent().tag == f"{{{V}}}textbox" for c in copies)})
+        out.append(TextBox("\n".join(paras), paragraphs=len(paras),
+                           vml_only=all(c.getparent().tag == f"{{{V}}}textbox" for c in copies)))
     return out
 
 

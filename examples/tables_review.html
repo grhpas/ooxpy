@@ -23,7 +23,7 @@ you can accept or reject. Script: <code>examples/tables_review.py</code></p>
 
 <h2>Tables</h2>
 <p><code>add_table</code> takes rows of values. Header rows repeat on every page and are
-bold; <code>widths</code> (from <code>oox.units</code>, or twips) fix the column widths:</p>
+bold; <code>widths</code> (points, or lengths from <code>oox.units</code>) fix the column widths:</p>
 <pre><code class="run">from oox import WordprocessingDocument
 from oox.units import Cm
 
@@ -50,7 +50,7 @@ doc.add_floating_picture("chart.png", width=Cm(3), h_align="right",
                          h_relative="margin", paragraph=title, wrap="square")
 doc.add_floating_picture("chart.png", width=Cm(12), h_align="center", v_align="center",
                          h_relative="page", v_relative="page", wrap="behind")
-print([p["wrap"] for p in doc.pictures()])</code></pre>
+print([p.wrap for p in doc.pictures()])</code></pre>
 <pre class="out">['square', 'behind']</pre>
 <p>A floating picture is anchored to a paragraph and positioned relative to the page,
 margin, column or paragraph, by alignment or by offset (<code>x=</code>, <code>y=</code>).
@@ -62,7 +62,7 @@ Wrapping: <code>square</code>, <code>tight</code>, <code>through</code>,
 doc.suggest_replace(p, "8%", "9%", author="Finance")
 doc.suggest_insert(p, " Unaudited.", author="Finance")
 doc.track_changes = True                  # Word keeps tracking later edits
-print([(r["kind"], r["text"]) for r in doc.revisions()])</code></pre>
+print([(r.kind, r.text) for r in doc.revisions()])</code></pre>
 <pre class="out">[('delete', '8%'), ('insert', '9%'), ('insert', ' Unaudited.')]</pre>
 <p>Word shows these as suggestions to accept or reject. Matching works across runs, as in
 <code>replace_text</code>.</p>

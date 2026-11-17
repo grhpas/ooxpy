@@ -72,15 +72,15 @@ def make_xlsx(path: Path, chart: bytes) -> None:
 def make_pptx(path: Path, chart: bytes, photo: bytes) -> None:
     deck = PresentationDocument.new()
     s1 = deck.add_slide()
-    deck.add_textbox(s1, Inches(0.7), Inches(0.5), Inches(12), Inches(1), "Regional sales",
-                     size=40, bold=True, color="1F3864")
-    deck.add_textbox(s1, Inches(0.7), Inches(1.8), Inches(5), Inches(3),
-                     "East leads on units\nWest has the best price\nTotal: 435 units", size=22)
-    deck.add_picture(s1, chart, Inches(6.3), Inches(1.7), width=Inches(6.3))
+    deck.add_text_box(s1, "Regional sales", x=Inches(0.7), y=Inches(0.5), width=Inches(12),
+                      height=Inches(1), size=40, bold=True, color="1F3864")
+    deck.add_text_box(s1, "East leads on units\nWest has the best price\nTotal: 435 units",
+                      x=Inches(0.7), y=Inches(1.8), width=Inches(5), height=Inches(3), size=22)
+    deck.add_picture(s1, chart, x=Inches(6.3), y=Inches(1.7), width=Inches(6.3))
     s2 = deck.add_slide()
-    deck.add_picture(s2, photo, Inches(3.67), Inches(1), width=Inches(6))
-    deck.add_textbox(s2, Inches(0.7), Inches(5.8), Inches(12), Inches(1), "Thank you",
-                     size=32, align="center")
+    deck.add_picture(s2, photo, x=Inches(3.67), y=Inches(1), width=Inches(6))
+    deck.add_text_box(s2, "Thank you", x=Inches(0.7), y=Inches(5.8), width=Inches(12),
+                      height=Inches(1), size=32, align="center")
     deck.save(path)
 
 

@@ -28,7 +28,7 @@ from .opc import Limits, Package, Part
 from .presentation import PresentationDocument
 from .spreadsheet import SpreadsheetDocument
 
-__version__ = "0.5.2"
+__version__ = "0.6.0"
 
 __all__ = [
                      "GRAMMAR_SOURCE",

@@ -13,8 +13,7 @@ return the merged cell.
 How OOXML stores merges: a horizontal merge is one ``w:tc`` with
 ``w:gridSpan``; a vertical merge keeps a ``w:tc`` in every row, the first with
 ``w:vMerge val="restart"`` and the ones below with ``w:vMerge`` (continue).
-Widths are in twips (1/1440 inch); EMU values from ``oox.units`` are
-converted when they are obviously EMU (> 100000).
+Widths and heights are in points, or a ``Length`` from ``oox.units``.
 
 Word doesn't count a row whose cells all continue vertical merges (Word 2007
 reports 3 rows for such a 4-row table, and the row takes no height); LibreOffice
@@ -29,6 +28,7 @@ from typing import TYPE_CHECKING, Any
 from .element import OoxElement
 from .grammar import URI
 from .ns import w
+from .units import PAGE_LIMIT, twips, twips_to_points
 
 if TYPE_CHECKING:
     from .document import WordprocessingDocument
@@ -38,9 +38,8 @@ _ALIGN = {"left": "left", "center": "center", "right": "right", "justify": "both
 _VALIGN = ("top", "center", "bottom")
 
 
-def _twips(value: int) -> int:
-    """Twips; EMU (from oox.units) are converted (914400 EMU = 1440 twips)."""
-    return round(value / 635) if value > 100000 else int(value)
+def _twips(value: float, name: str = "width") -> int:
+    return twips(value, name, PAGE_LIMIT)
 
 
 def _w(el: OoxElement, attr: str, default: str | None = None) -> str | None:
@@ -262,7 +261,7 @@ class Table:
                 in_rect = row1 <= r <= row2 and col1 <= c <= col2
                 if tc is not None and id(tc) in inside and not in_rect:
                     raise ValueError(f"cell ({r}, {c}) is already merged across the range edge")
-        widths = self.widths
+        widths = self._grid_twips()
         span = col2 - col1 + 1
         origin: OoxElement | None = None
         for r in range(row1, row2 + 1):
@@ -291,16 +290,19 @@ class Table:
         return origin
 
     @property
-    def widths(self) -> list[int]:
-        """Column widths from the table grid, in twips."""
+    def widths(self) -> list[float]:
+        """Column widths from the table grid, in points."""
+        return [twips_to_points(x) for x in self._grid_twips()]
+
+    def _grid_twips(self) -> list[int]:
         grid = self.element.first("w:tblGrid")
         if grid is None:
             return []
         return [int(_w(g, "w", "0") or 0) for g in grid.iterchildren(f"{{{W}}}gridCol")]
 
-    def set_widths(self, widths: list[int]) -> None:
-        """Fixed column widths (twips or EMU); updates the grid, every cell and
-        the table width, and switches to a fixed layout."""
+    def set_widths(self, widths: list[float]) -> None:
+        """Fixed column widths in points (or ``Length``); updates the grid, every
+        cell and the table width, and switches to a fixed layout."""
         widths = [_twips(x) for x in widths]
         if len(widths) != self.n_cols:
             raise ValueError(f"{len(widths)} widths for {self.n_cols} columns")
@@ -335,14 +337,15 @@ class Table:
             n += 1
         return n
 
-    def set_row_height(self, row: int, twips: int, rule: str = "atLeast") -> None:
-        """Height of ``row`` in twips (or EMU from ``oox.units``); ``rule`` "atLeast" or
+    def set_row_height(self, row: int, height: float, rule: str = "atLeast") -> None:
+        """Height of ``row`` in points (or ``Length``); ``rule`` "atLeast" or
         "exact"."""
-        _set_row_prop(self.rows[row], w.TrHeight(val=_twips(twips), hRule=rule), "trHeight")
+        _set_row_prop(self.rows[row], w.TrHeight(val=_twips(height, "height"), hRule=rule),
+                      "trHeight")
 
     def add_row(self, values: list[Any] | None = None) -> OoxElement:
         """Append a row (one cell per grid column) and return it."""
-        widths = self.widths
+        widths = self._grid_twips()
         tr = w.Tr()
         for c in range(self.n_cols):
             tc = w.Tc(w.TcPr(w.TcW(w=widths[c] if c < len(widths) else 0, type="dxa")))
@@ -371,39 +374,40 @@ def _move_content(src: OoxElement, dst: OoxElement) -> None:
 
 
 def add_table(doc: WordprocessingDocument, rows: list[list[Any]], *,
-              widths: list[int] | None = None, style: str | None = "Table Grid",
+              widths: list[float] | None = None, style: str | None = "Table Grid",
               header_rows: int = 0, bold_header: bool = True, align: str | None = None,
               before: OoxElement | None = None) -> Table:
     """A table from rows of values (str, numbers, None, or paragraphs).
 
-    ``widths`` (twips or EMU per column) gives a fixed layout; by default the
+    ``widths`` (points or ``Length`` per column) gives a fixed layout; by default the
     columns share the section's text width.  ``header_rows`` repeat on each
     page and are bold unless ``bold_header=False``.
     """
     n_cols = max((len(r) for r in rows), default=0)
     if n_cols == 0:
         raise ValueError("a table needs at least one cell")
+    grid: list[int]
     if widths is None:
-        text_width = doc.sections[-1].text_width
-        widths = [text_width // n_cols] * n_cols
+        text_width = twips(doc.sections[-1].text_width)
+        grid = [text_width // n_cols] * n_cols
         fixed = False
     else:
-        widths = [_twips(x) for x in widths]
-        if len(widths) != n_cols:
-            raise ValueError(f"{len(widths)} widths for {n_cols} columns")
+        grid = [_twips(x) for x in widths]
+        if len(grid) != n_cols:
+            raise ValueError(f"{len(grid)} widths for {n_cols} columns")
         fixed = True
-    tblpr = w.TblPr(w.TblW(w=sum(widths), type="dxa"))
+    tblpr = w.TblPr(w.TblW(w=sum(grid), type="dxa"))
     if style:
         tblpr.add(w.TblStyle(val=doc.style_id(style)))
     if align:
         tblpr.add(w.Jc(val=_ALIGN[align]))
     if fixed:
         tblpr.add(w.TblLayout(type="fixed"))
-    tbl = w.Tbl(tblpr, w.TblGrid(*(w.GridCol(w=x) for x in widths)))
+    tbl = w.Tbl(tblpr, w.TblGrid(*(w.GridCol(w=x) for x in grid)))
     for i, values in enumerate(rows):
         tr = w.Tr(w.TrPr(w.TblHeader())) if i < header_rows else w.Tr()
         for c in range(n_cols):
-            tc = w.Tc(w.TcPr(w.TcW(w=widths[c], type="dxa")))
+            tc = w.Tc(w.TcPr(w.TcW(w=grid[c], type="dxa")))
             _fill_cell(tc, values[c] if c < len(values) else None,
                        bold=bold_header and i < header_rows)
             tr.add(tc)
@@ -422,9 +426,11 @@ def add_table(doc: WordprocessingDocument, rows: list[list[Any]], *,
 
 
 def tables(doc: WordprocessingDocument) -> list[Table]:
-    """The body's top-level tables (nested ones: ``Table(None, el)`` on a
-    ``w:tbl`` found in a cell)."""
-    return [Table(doc, t) for t in doc.body.iterchildren(f"{{{W}}}tbl")]
+    """The body's top-level tables, including those inside block-level content
+    controls (nested ones: ``Table(None, el)`` on a ``w:tbl`` found in a cell)."""
+    from .walk import iter_blocks
+
+    return [Table(doc, t) for t in iter_blocks(doc.body, f"{{{W}}}tbl")]
 
 
 def ensure_paragraph_after_table(doc: WordprocessingDocument) -> None:

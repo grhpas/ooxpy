@@ -44,18 +44,19 @@ def main(outdir: str) -> None:
     # PowerPoint
     deck = PresentationDocument.new()
     slide = deck.add_slide("Blank")
-    deck.add_textbox(slide, Inches(0.5), Inches(0.3), Inches(9), Inches(0.8), "Traffic",
-                     size=28, bold=True)
+    deck.add_text_box(slide, "Traffic", x=Inches(0.5), y=Inches(0.3), width=Inches(9),
+                      height=Inches(0.8), size=28, bold=True)
     deck.add_chart(slide, "line", ["Jan", "Feb", "Mar", "Apr"],
                    {"Visits": [1200, 1450, 1390, 1600], "Orders": [310, 365, 330, 410]},
-                   Inches(0.5), Inches(1.3), Inches(6), Inches(4.5), y_title="count")
+                   x=Inches(0.5), y=Inches(1.3), width=Inches(6), height=Inches(4.5),
+                   y_title="count")
     deck.add_chart(slide, "scatter", [1, 2, 3, 4, 5], {"Measured": [2.1, 3.9, 6.2, 7.8, 10.1]},
-                   Inches(6.8), Inches(1.3), Inches(5.5), Inches(4.5), lines=True,
-                   smooth=True, legend=None, title="Fit")
+                   x=Inches(6.8), y=Inches(1.3), width=Inches(5.5), height=Inches(4.5),
+                   lines=True, smooth=True, legend=None, title="Fit")
     deck.save(out / "charts.pptx")
 
-    print([c["type"] for c in book.charts("Sales")], [c["type"] for c in doc.charts()],
-          [c["type"] for c in deck.charts(slide)])
+    print([c.kind for c in book.charts("Sales")], [c.kind for c in doc.charts()],
+          [c.kind for c in deck.charts(slide)])
 
 
 if __name__ == "__main__":

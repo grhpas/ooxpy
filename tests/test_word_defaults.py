@@ -102,7 +102,7 @@ def test_body_sectpr_replace():
 def test_properties_read_libreoffice_relationship_variant():
     doc = WordprocessingDocument.new()
     doc.properties.title = "via LibreOffice"
-    rel = next(r for r in doc.package.root.rels.items.values() if "core-properties" in r.reltype)
+    rel = next(r for r in doc.package.root.rels.values() if "core-properties" in r.reltype)
     rel.reltype = ("http://schemas.openxmlformats.org/officedocument/2006/relationships/"
                    "metadata/core-properties")  # what LibreOffice writes
     buf = io.BytesIO()

@@ -27,7 +27,7 @@ def test_percentages_written_as_strict_and_read_back():
     pic = deck.set_placeholder_picture(s, "pic", image("PNG"))
     src = pic.find(".//{http://schemas.openxmlformats.org/drawingml/2006/main}srcRect")
     cut = int(src.get("l"))
-    sp = deck.add_shape(s, "rect", 0, 0, 100, 100)
+    sp = deck.add_shape(s, "rect", x=0, y=0, width=100, height=100)
     fill = sp.find(".//{http://schemas.openxmlformats.org/drawingml/2006/main}srgbClr")
     fill.add(a.LumMod(val=75000))
     data = _strict_bytes(deck)
@@ -56,7 +56,7 @@ def test_unknown_percentage_attributes_round_trip_as_read():
     on reading and goes back on writing (the part remembers it)."""
     deck = PresentationDocument.new()
     s = deck.add_slide()
-    sp = deck.add_shape(s, "rect", 0, 0, 100, 100)
+    sp = deck.add_shape(s, "rect", x=0, y=0, width=100, height=100)
     fill = sp.find(".//{http://schemas.openxmlformats.org/drawingml/2006/main}srgbClr")
     fill.add(a.HueOff(val=600000))                        # an angle, not in KNOWN_PERCENT
     data = _strict_bytes(deck)

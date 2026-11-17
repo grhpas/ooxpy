@@ -155,6 +155,18 @@ part_of(element: OoxElement) -> Part
 
 The part whose XML tree contains `element`.
 
+### `image_of`
+
+```python
+image_of(element) -> ImageData
+```
+
+The image an element shows: `(data, content_type, partname,
+external)`.  `element` is an `a:blip` or `v:imagedata`, anything
+that holds one (`w:drawing`, `pic:pic`, `p:pic`, `w:pict`), a
+picture from `pictures()` or a picture bullet's `ListItem.picture`.
+A linked image has `data` None and its address in `external`.
+
 ### `getElementsByType`
 
 ```python

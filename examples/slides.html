@@ -29,7 +29,7 @@ slide = deck.add_slide("Two Content")
 deck.set_placeholder_text(slide, "title", "Plan")
 deck.set_placeholder_text(slide, 1, ["Research", (1, "interviews")])
 deck.set_placeholder_text(slide, 2, ["Build", "Launch"])
-print([(t, i) for t, i, _ in deck.placeholders(slide)])</code></pre>
+print([(ph.type, ph.idx) for ph in deck.placeholders(slide)])</code></pre>
 <pre class="out">11 ['Section Header', 'Two Content', 'Comparison']
 [('title', 0), ('obj', 1), ('obj', 2)]</pre>
 <p>A new deck has Office's eleven layouts with Office's own placeholder positions, scaled
@@ -45,10 +45,11 @@ layout has several of the same kind.</p>
 slide = deck.add_slide("Title Only")
 deck.set_placeholder_text(slide, "title", "Results")
 deck.add_table(slide, [["Region", "Q1", "Q2"], ["North", 120, 135], ["South", 95, 110],
-                       ["Total", None, 245]], Inches(1), Inches(2), Inches(8),
-               merges=["A4:B4"], style="Medium Style 2 - Accent 1")
+                       ["Total", None, 245]],
+               x=Inches(1), y=Inches(2), width=Inches(8), merges=["A4:B4"],
+               style="Medium Style 2 - Accent 1")
 info = deck.tables(slide)[0]
-print(info["rows"][3], info["merges"], info["style_name"])</code></pre>
+print(info.rows[3], info.merges, info.style_name)</code></pre>
 <pre class="out">['Total', '', '245'] ['A4:B4'] Medium Style 2 - Accent 1</pre>
 <p>Tables use PowerPoint's built-in styles, by name (<code>oox.slides.TABLE_STYLES</code>)
 or by GUID. <code>header=</code>, <code>banded=</code> and <code>first_column=</code> switch
@@ -64,12 +65,13 @@ notes from any deck and returns <code>None</code> for a slide without notes.</p>
 
 <h2>Shapes</h2>
 <pre><code class="run">slide = deck.add_slide("Blank")
-deck.add_shape(slide, "roundRect", Inches(1), Inches(2), Inches(3), Inches(1.2), text="Plan")
-deck.add_shape(slide, "chevron", Inches(4.5), Inches(2), Inches(3), Inches(1.2), text="Build",
-               fill="ED7D31")
-deck.add_shape(slide, "ellipse", Inches(8), Inches(2), Inches(2), Inches(2), text="Done",
-               fill="70AD47", line="375623", line_width=2)
-print([(s["kind"], s["geometry"], s["text"]) for s in deck.shapes(slide)])</code></pre>
+deck.add_shape(slide, "roundRect", x=Inches(1), y=Inches(2), width=Inches(3), height=Inches(1.2),
+               text="Plan")
+deck.add_shape(slide, "chevron", x=Inches(4.5), y=Inches(2), width=Inches(3), height=Inches(1.2),
+               text="Build", fill="ED7D31")
+deck.add_shape(slide, "ellipse", x=Inches(8), y=Inches(2), width=Inches(2), height=Inches(2),
+               text="Done", fill="70AD47", line="375623", line_width=2)
+print([(s.kind, s.geometry, s.text) for s in deck.shapes(slide)])</code></pre>
 <pre class="out">[('shape', 'roundRect', 'Plan'), ('shape', 'chevron', 'Build'), ('shape', 'ellipse', 'Done')]</pre>
 <p>Shapes: <code>rect</code>, <code>roundRect</code>, <code>ellipse</code>, <code>triangle</code>,
 <code>diamond</code>, <code>hexagon</code>, <code>octagon</code>, the four arrows,
@@ -81,7 +83,7 @@ print([(s["kind"], s["geometry"], s["text"]) for s in deck.shapes(slide)])</code
 deck.set_placeholder_text(slide, "title", "The team")
 deck.set_placeholder_text(slide, 2, "Offsite, May 2026")
 deck.set_placeholder_picture(slide, "pic", "chart.png")
-print([s["kind"] for s in deck.shapes(slide)])
+print([s.kind for s in deck.shapes(slide)])
 deck.save("plan.pptx")</code></pre>
 <pre class="out">['placeholder', 'picture', 'placeholder']</pre>
 <p>The picture takes the placeholder's place and position, cropped to fill it the way
@@ -112,15 +114,15 @@ through them goes; inserting inside a merge is refused. <code>merge()</code>,
 <h2>Links</h2>
 <pre><code class="run">slide = deck.add_slide("Title Only")
 deck.set_placeholder_text(slide, "title", "Next steps")
-box = deck.add_textbox(slide, Inches(1), Inches(2), Inches(8), Inches(1),
-                       "Details in the wiki; questions to the team.")
+box = deck.add_text_box(slide, "Details in the wiki; questions to the team.", x=Inches(1),
+                        y=Inches(2), width=Inches(8), height=Inches(1))
 deck.set_link(slide, box, "https://wiki.example.org/falcon", text="the wiki")
 deck.set_link(slide, box, "mailto:falcon@example.org", text="the team")
-arrow = deck.add_shape(slide, "leftArrow", Inches(1), Inches(4), Inches(2), Inches(1),
-                       text="Results")
+arrow = deck.add_shape(slide, "leftArrow", x=Inches(1), y=Inches(4), width=Inches(2),
+                       height=Inches(1), text="Results")
 deck.set_link(slide, arrow, results)   # jump to a slide in the show
 for link in deck.links(slide):
-    print(link["text"], link["kind"], link["target"])
+    print(link.text, link.kind, link.target or link.anchor)
 deck.save("plan.pptx")</code></pre>
 <pre class="out">the wiki url https://wiki.example.org/falcon
 the team url mailto:falcon@example.org

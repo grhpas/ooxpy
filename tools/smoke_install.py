@@ -52,7 +52,7 @@ def main() -> int:
         deck = PresentationDocument.new()
         slide = deck.add_slide("Title and Content")
         deck.set_placeholder_text(slide, "title", "Smoke test")
-        deck.add_table(slide, [["a", "b"], [1, 2]], Cm(2), Cm(5))
+        deck.add_table(slide, [["a", "b"], [1, 2]], x=Cm(2), y=Cm(5))
         deck.save(os.path.join(out, "smoke.pptx"))
 
         failures = []

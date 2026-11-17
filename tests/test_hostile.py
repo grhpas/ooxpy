@@ -112,7 +112,7 @@ def _seeds():
                   lambda: PresentationDocument.new()):
         doc = build()
         if isinstance(doc, PresentationDocument):
-            doc.add_textbox(doc.add_slide(), 0, 0, 914400, 914400, "fuzz")
+            doc.add_text_box(doc.add_slide(), "fuzz", x=0, y=0, width=72, height=72)
         yield doc.package.to_bytes()
 
 

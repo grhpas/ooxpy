@@ -119,20 +119,24 @@ print(doc.validate(level="full", target="Office2007"))
 
 ## Units
 
-DrawingML measures in **EMU** (914,400 per inch), Word's page and table layout in
-**twips** (1,440 per inch), font sizes in half-points. `oox.units` converts to EMU, and
-the conveniences take EMU wherever they place something:
+One rule everywhere: **a plain number is points**, as in Office's dialogs, and
+anything else is a length from `oox.units`. Sizes, positions, margins, widths, indents
+and spacing all follow it, in all three formats, and every reader reports points:
 
 ```python
-from oox.units import Cm, Inches, Mm, Pt, Px, to_twips
+from oox.units import Cm, Emu, Inches, Pt
 
-print(Inches(1), Cm(2.54), Pt(72), Px(96))    # all 914400
-print(to_twips(Inches(1)))                     # 1440
+doc.add_picture("logo.png", width=Cm(4))         # or width=113.4 (points)
+doc.sections[0].set_margins(left=Inches(1))      # or left=72
+print(doc.sections[0].margins["left"])           # 72.0
+print(Cm(2.54).pt, Inches(1).cm)                 # 72.0 2.54
 ```
 
-Word table widths and section margins accept either twips or EMU (values above
-100,000 are taken as EMU), so `Cm(3)` works there too. Excel column widths are in
-characters and row heights in points, as in Excel's own dialogs.
+Underneath, Office files use EMU (914,400 per inch) for drawings and twips (1/20
+point) for Word's page layout; oox converts. A plain number far too big to be meant as
+points (an EMU or twips value copied from elsewhere) raises an error suggesting
+`Emu(...)`. The one exception to the rule is Excel's column width, which is in
+characters, as in Excel's own dialog.
 
 ## Reading what you (or anyone) wrote
 
@@ -146,6 +150,28 @@ from oox import teletype
 
 print(teletype.extractText(doc.body))
 ```
+
+Readers return **records**: small frozen objects with named fields, from
+`oox.records`. The same thing has the same record in every format (a `Hyperlink` from
+Word, Excel or PowerPoint, a `Comment` from Word or Excel), lengths are in points, and
+where a writer exists the field names are its keyword names, so what you read can be
+written back:
+
+```python
+from oox import SpreadsheetDocument
+
+book = SpreadsheetDocument.new("Q1")
+book.set_page_setup("Q1", orientation="landscape", margins={"left": 36})
+setup = book.page_setup("Q1")                  # PageSetup(orientation='landscape', ...)
+book.add_sheet("Q2")
+book.set_page_setup("Q2", **setup.as_dict())   # the same setup on another sheet
+print(book.page_setup("Q2").orientation)       # landscape
+```
+
+`as_dict()` gives a plain dict for JSON (records that carry an XML element leave it
+out). Readers whose result is the data itself stay plain: `book.values(sheet)` is
+rows of values, `book.defined_names()` a name → range dict. Reading never changes a
+document.
 
 ## Lossless round trips
 

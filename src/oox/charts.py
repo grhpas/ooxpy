@@ -6,7 +6,7 @@ PowerPoint.
     space = build_chart("column", ["Q1", "Q2", "Q3"],
                         [Series("North", [120, 135, 150]), Series("South", [95, 110, 99])],
                         title="Sales", y_title="EUR k", legend="bottom", labels="value")
-    chart_info(space)["type"]        # "column"
+    chart_info(space).kind           # "column"
 
 The applications wrap this: ``SpreadsheetDocument.add_chart`` (series from a
 cell range), ``WordprocessingDocument.add_chart`` and
@@ -53,7 +53,7 @@ CAT_AX, VAL_AX = 500000001, 500000002
 CAT2_AX, VAL2_AX = 500000003, 500000004   # secondary axes
 COMBINABLE = ("column", "line", "area")
 RT_CHART = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart"
-# Excel's XlChartType -> chart_info()["type"]
+# Excel's XlChartType -> chart_info().kind
 EXCEL_CHART_TYPES = {
     51: "column", 52: "column_stacked", 53: "column_percent",
     57: "bar", 58: "bar_stacked", 59: "bar_percent",
@@ -89,6 +89,7 @@ class Series:
     categories_ref: str | None = None
     kind: str | None = None          # another kind than the chart's (combination charts)
     axis: str = "primary"            # or "secondary": its own value axis on the right
+    point_colors: Sequence[str | None] = ()   # per point (pie slices); read from charts
 
 
 # -- building -----------------------------------------------------------------------
@@ -586,13 +587,35 @@ def _shown_labels(dl) -> list[str]:
                   if _val(dl, tag) in ("1", "true"))
 
 
-def chart_info(space: OoxElement) -> dict:
-    """Describe a ``c:chartSpace``: type (Excel's vocabulary, see
-    ``EXCEL_CHART_TYPES``), title, legend position, axis titles, value number
-    format, data labels, and per series its name, values, categories, refs,
-    colour, "type" (its plot's, for combination charts) and "axis" ("primary"
-    or "secondary"; the secondary value axis's title is "y2_title").  Series
-    come in plot order (``c:order``)."""
+def chart_info(space: OoxElement):
+    """Describe a ``c:chartSpace`` as a ``Chart`` record (``oox.records``):
+    kind (Excel's vocabulary, see ``EXCEL_CHART_TYPES``), title, legend
+    position, axis titles, value number format, data labels, and its
+    ``Series`` with names, values, categories, refs, colours, kind (its
+    plot's, for combination charts) and axis ("primary" or "secondary"; the
+    secondary value axis's title is ``y2_title``).  Series come in plot order
+    (``c:order``)."""
+    return chart_record(_chart_dict(space))
+
+
+def chart_record(info: dict, **extra):
+    """A ``Chart`` record from ``_chart_dict``'s dict."""
+    from .records import Chart
+
+    series = [Series(name=s["name"], values=s["values"], categories=s["categories"],
+                     color=s["color"], name_ref=s["name_ref"], values_ref=s["values_ref"],
+                     categories_ref=s["categories_ref"], kind=s.get("type"),
+                     axis=s.get("axis", "primary"), point_colors=list(s["point_colors"]))
+              for s in info["series"]]
+    return Chart(kind=info["type"], plot_kinds=info["types"], title=info["title"],
+                 legend=info["legend"], x_title=info["x_title"], y_title=info["y_title"],
+                 y2_title=info["y2_title"], number_format=info["number_format"],
+                 labels=info["labels"], series=series, categories=info["categories"],
+                 anchor=info.get("anchor"), name=info.get("name"), rid=info.get("rid"),
+                 **extra)
+
+
+def _chart_dict(space: OoxElement) -> dict:
     chart = space.find(_q("chart"))
     area = chart.find(_q("plotArea")) if chart is not None else None
     plots = [el for el in (area if area is not None else [])
@@ -727,18 +750,20 @@ def add_embedded_chart(doc, source, kind: str, categories: Sequence, series, **o
     return rid, space
 
 
-def charts_in(doc, part, root) -> list[dict]:
-    """``chart_info`` for each chart referenced under ``root`` (a document body
-    or slide tree) of ``part``, in document order, with its "rid"."""
+def charts_in(doc, part, root) -> list:
+    """A ``Chart`` for each chart referenced under ``root`` (a document body
+    or slide tree) of ``part``, in document order, with its ``rid``."""
+    from .walk import iter_story
+
     out = []
-    for ref in root.iter(C_CHART_REF):
+    for ref in iter_story(root, C_CHART_REF):
         rid = ref.get(R_ID)
-        rel = part.rels.items.get(rid or "")
+        rel = part.rels.get(rid or "")
         if rel is None or rel.reltype != RT_CHART:
             continue
         target = part.resolve(rel.target)
         if target in doc.package.parts:
-            info = chart_info(doc.package.parts[target].element)
+            info = _chart_dict(doc.package.parts[target].element)
             info["rid"] = rid
-            out.append(info)
+            out.append(chart_record(info))
     return out

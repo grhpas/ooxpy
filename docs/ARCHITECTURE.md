@@ -87,6 +87,36 @@ whether they are permanent or a migration aid that gets deprecated later.
 - No `DeprecationWarning`s. The 1.0 API freeze includes the compatibility surface.
 - Translated odfpy example scripts in `tests/test_odfpy_examples.py` guard it.
 
+## ADR-003: Readers report what Word shows, and never write
+
+**Context.** A review of reading real files (2026-11) found readers disagreeing
+with Word in three ways: content Word stores twice (`mc:AlternateContent` text
+boxes) was counted twice by some readers and not others; paragraphs inside
+content controls were missed by some readers; and some getters created parts or
+settings while reading.
+
+**Decision.**
+
+- One walker, `oox.walk`, defines the document as Word shows it: the chosen
+  `mc:AlternateContent` branch only (the first `mc:Choice` whose `Requires` are
+  known namespaces, else the `mc:Fallback`), through `w:sdt`/`w:customXml`
+  wrappers. Every reader uses it. Mutators (accept/reject, replace, controls,
+  field updates) still walk every copy, so both copies stay in step.
+- Reading never changes a document. Missing parts and settings read as Word's
+  defaults; `ensure_*` methods and setters write. `tests/test_reading_is_pure.py`
+  classifies every public member as reader or writer and fails on an
+  unclassified one.
+- Effective formatting is one resolver (`resolve.py`) applying Word's style
+  hierarchy (ECMA-376 §17.7.2) with the documented Word deviations
+  (MS-OI29500 2.1.258 for paragraph-style toggles, MS-DOCX's table font-size and
+  justification rule, numbering-before-style when numbering comes from the style).
+  Its results use the same units and value types as the writers (points,
+  `LineSpacing`, `Border`, `Tab`).
+
+**Consequences.** A new reader must use the walker and be listed in the purity
+test. Behaviour that depends on layout (page numbers, contextual spacing between
+paragraphs) stays out of scope.
+
 ## Runtime design
 
 ### 1. Content-model keys and context resolution
@@ -143,9 +173,9 @@ works.
 
 | | Skeleton built by `new()` | Conveniences |
 |---|---|---|
-| `WordprocessingDocument` | `word/document.xml`, plus by default styles, settings, font table, theme and a section (`word_defaults.py`; `minimal=True` for the bare package) | `body`/`text`, `styles`, `style_id`, `add_heading`, `add_paragraph`, `add_page_break`, `new_list` / `list_labels` (`numbering.py`), `add_picture` (inline), `sections` / `add_section` (`sections.py`), hyperlinks, bookmarks, notes, comments (`notes.py`), `add_toc` (`fields.py`), `replace_text` (`template.py`), `add_table` / `tables` (`tables.py`), `add_floating_picture` / `pictures` (`floating.py`), `suggest_*`, `revisions`, `accept_all` / `reject_all` (`revisions.py`), `add_run` / `format_paragraph` / `add_style` / `effective_format` (`formatting.py`), `add_caption` / `add_cross_reference` / `add_field` / `fields` / `update_fields` (`fieldcalc.py`), content controls (`controls.py`), `add_chart` / `charts` (inline, with an embedded workbook), `add_text_box` / `text_boxes` / `set_text_box_text` (`textboxes.py`), `protect` / `protection` / `check_protection_password` / `unprotect` (`protection.py`) |
+| `WordprocessingDocument` | `word/document.xml`, plus by default styles, settings, font table, theme and a section (`word_defaults.py`; `minimal=True` for the bare package) | `body`/`text`, `styles`, `style_id`, `add_heading`, `add_paragraph`, `add_page_break`, `new_list` / `list_labels` (`numbering.py`), `add_picture` (inline), `sections` / `add_section` (`sections.py`), hyperlinks, bookmarks, notes, comments (`notes.py`), `add_toc` (`fields.py`), `replace_text` (`template.py`), `add_table` / `tables` (`tables.py`), `add_floating_picture` / `pictures` (`floating.py`), `suggest_*`, `revisions`, `accept_all` / `reject_all` (`revisions.py`), `add_run` / `format_paragraph` / `add_style` (`formatting.py`), `formatting` / `effective_format` (`resolve.py`), `add_caption` / `add_cross_reference` / `add_field` / `fields` / `update_fields` (`fieldcalc.py`), content controls (`controls.py`), `add_chart` / `charts` (inline, with an embedded workbook), `add_text_box` / `text_boxes` / `set_text_box_text` (`textboxes.py`), `protect` / `protection` / `check_protection_password` / `unprotect` (`protection.py`) |
 | `SpreadsheetDocument` | `xl/workbook.xml` plus one worksheet (Excel rejects a workbook with no sheets) | `add_sheet`, `sheet`, `append_row`, `value`/`values`/`cells` (reading), `set_value` (editing), `cell`/`row`/`Formula` helpers, `add_picture` (anchored in a drawing part), `cell_style` / `style_range` / `cell_format` / `display_text` (`xlstyles.py`), widths, heights, merges, frozen panes, autofilter, names, validation (`xlsheet.py`), conditional formats (`xlcond.py`), tables (`xltables.py`), comments and hyperlinks (`xlnotes.py`), print setup, sheet options, sheet protection (`xlprint.py`), `protect_workbook` / `workbook_protection` (`protection.py`), `add_chart` / `charts` from cell ranges and `add_chart_sheet` (`xlcharts.py`), `tab_names` / `sheet_names` (worksheets) / `chart_sheet_names`, `share_strings` |
-| `PresentationDocument` | presentation → slide master (title/body placeholders, text styles) → Office's eleven standard layouts (`layouts="basic"`: Title Slide, Title and Content, Blank); master → theme; presProps, viewProps, tableStyles; a notes master on first `set_notes` | `add_slide(layout)` (copies placeholders), `layout(name)`, `placeholders`, `set_placeholder_text`, `add_layout`, `add_textbox`, `add_picture`, `add_chart` / `charts` (graphic frame, embedded workbook), `slide_layout`, `add_shape`, `add_table` / `tables`, `set_notes` / `notes`, `set_placeholder_picture`, `shapes` (`slides.py`), `table` → `SlideTable` for editing (`slidetable.py`), `set_link` / `links` (`slidelinks.py`), `set_sections` / `sections` (`sections_pml.py`) |
+| `PresentationDocument` | presentation → slide master (title/body placeholders, text styles) → Office's eleven standard layouts (`layouts="basic"`: Title Slide, Title and Content, Blank); master → theme; presProps, viewProps, tableStyles; a notes master on first `set_notes` | `add_slide(layout)` (copies placeholders), `layout(name)`, `placeholders`, `set_placeholder_text`, `add_layout`, `add_text_box`, `add_picture`, `add_chart` / `charts` (graphic frame, embedded workbook), `slide_layout`, `add_shape`, `add_table` / `tables`, `set_notes` / `notes`, `set_placeholder_picture`, `shapes` (`slides.py`), `table` → `SlideTable` for editing (`slidetable.py`), `set_link` / `links` (`slidelinks.py`), `set_sections` / `sections` (`sections_pml.py`) |
 
 Word conveniences follow two rules. **Styles are added on first use**:
 `ensure_style("FootnoteText")` adds Word's definition only if the document
@@ -222,7 +252,7 @@ ooxpy/
 │  ├─ presentation.py      PresentationDocument (master/layout/theme skeleton, slides)
 │  ├─ drawing.py           DrawingML builders: picture, shape props, default theme
 │  ├─ images.py            PNG/JPEG/GIF/BMP/TIFF/EMF/WMF/SVG header parsing (size, DPI)
-│  ├─ units.py             EMU helpers: Inches, Cm, Mm, Pt, Px
+│  ├─ units.py             lengths: plain numbers are points, Length (Cm, Inches, Emu ...), range checks
 │  ├─ word_defaults.py     Word's default styles, settings, fonts, section
 │  ├─ properties.py        core, extended (app.xml) and custom (custom.xml) properties
 │  ├─ numbering.py         Word lists: definitions, list instances, displayed labels
@@ -233,7 +263,11 @@ ooxpy/
 │  ├─ tables.py            Word tables: merges, widths, header rows, reading
 │  ├─ floating.py          anchored pictures with text wrapping; picture reader
 │  ├─ revisions.py         tracked changes: suggest, list, accept, reject
-│  ├─ formatting.py        run/paragraph formatting, custom styles, effective formatting
+│  ├─ formatting.py        run/paragraph formatting, custom styles, LineSpacing/Border/Tab
+│  ├─ resolve.py           effective formatting: Word's style hierarchy (ADR-003)
+│  ├─ records.py           what readers return: frozen records (Hyperlink, Comment, Chart ...)
+│  ├─ walk.py              the document as Word shows it: chosen AlternateContent branch,
+│  │                       content-control wrappers (ADR-003)
 │  ├─ fieldcalc.py         captions, cross-references, field scanning and recomputing
 │  ├─ controls.py          content controls (forms): add, read, fill
 │  ├─ textboxes.py         Word text boxes (DrawingML with a VML fallback): add, read, edit
@@ -260,6 +294,7 @@ ooxpy/
 │  ├─ _odfdom.py          odfpy DOM mixin for OoxElement
 │  ├─ odfcompat.py        load(), OpenDocumentText(), Text
 │  ├─ teletype.py         extractText / addTextToElement
+│  ├─ __pyinstaller/       PyInstaller hook (entry point pyinstaller40)
 │  ├─ _generated/          GENERATED: namespaces, index, enums, parts, g_<prefix>.py grammar tables,
 │  │                       p_<prefix>.py content-model trees
 │  └─ ns/                  GENERATED: one factory module per prefix  (from oox.ns import w, a, p, x),
@@ -271,6 +306,7 @@ ooxpy/
 ├─ tools/apidocs.py        API reference pages (docs/reference) from the docstrings
 ├─ tools/api_surface.py    the public API, pinned in tests/api/public_api.txt
 ├─ tools/smoke_install.py  checks an installed wheel from outside the repository
+├─ tools/locorpus.py       .docx files LibreOffice writes from known sources (tests/data/libreoffice)
 ├─ tools/gen/              generator (not shipped)
 │  ├─ ir.py                source-agnostic IR
 │  ├─ sdk_frontend.py      Open XML SDK JSON -> IR
@@ -325,6 +361,7 @@ namespace. `import oox` plus the `w` factories takes about 0.1 s.
 - Excel: `display_text` gives what English-locale Excel shows (Excel uses the viewer's regional separators and names unless the code has a `[$-409]`-style locale prefix); it uses "." / "," separators and English month and day names; fraction formats (`# ?/?`) and conditional sections (`[>100]`) aren't rendered. Column widths assume Calibri 11 (7 px per digit).
 - PowerPoint: Office's eleven standard layouts are built in; handout masters, transitions and animations aren't modelled (they round-trip untouched). Sections are PowerPoint 2010+ (2007 and LibreOffice ignore them).
 - Charts: columns, lines and areas combine (bars only with bars); scatter, pie and doughnut don't combine and have no secondary axis. Values are cached from the cells when the chart is added; charts without caches (openpyxl's) are read from the cells.
+- Formatting resolution covers Word's style hierarchy but not complex-script variants, character-unit indents, line-unit spacing, East Asian layout, frames, or `contextualSpacing` between neighbours (the flag is reported).
 - Single-cell reads use caches checked on every lookup; editing the tree in ways that keep the same last row and shared-string count but change content in place (rewriting a shared string's text) isn't detected until the next structural change.
 - Equations, SmartArt and mail merge have no helpers yet: the factories (`oox.ns.m`, `dgm`) build them by hand, and files containing them round-trip untouched.
 - Protection is an editing restriction, not encryption: the content stays readable in the file, and any tool can remove it. Password-encrypted files (an OLE container around the package) can't be opened or written.

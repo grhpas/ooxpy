@@ -66,10 +66,10 @@ def _summary(doc) -> dict:
                            "notes": doc.notes(s) is not None} for s in doc.slides]
         info["layouts"] = doc.layout_names
     else:
-        from .ns import w
+        from .walk import TBL, P, iter_story
 
-        info["paragraphs"] = len(doc.body.getElementsByType(w.P))
-        info["tables"] = len(doc.body.getElementsByType(w.Tbl))
+        info["paragraphs"] = sum(1 for _ in iter_story(doc.body, P))
+        info["tables"] = sum(1 for _ in iter_story(doc.body, TBL))
         info["charts"] = len(doc.charts())
     return info
 
@@ -110,21 +110,17 @@ def cmd_text(args) -> int:
         for i, slide in enumerate(doc.slides, 1):
             print(f"# Slide {i}", file=out)
             for shape in doc.shapes(slide):
-                if shape["text"]:
-                    print(shape["text"], file=out)
+                if shape.text:
+                    print(shape.text, file=out)
             notes = doc.notes(slide)
             if notes:
                 print(f"[notes] {notes}", file=out)
     elif isinstance(doc, WordprocessingDocument):
-        from .grammar import URI
-        from .ns import w
+        from .walk import P, iter_story
 
-        fallback = f"{{{URI['mc']}}}Fallback"
-        for para in doc.body.getElementsByType(w.P):
-            # each paragraph once: a text box's paragraphs follow the one that
-            # anchors it, and the VML copy Word keeps of the box is skipped
-            if any(a.tag == fallback for a in para.iterancestors()):
-                continue
+        # each paragraph once, as Word shows it: a text box's paragraphs
+        # follow the one that anchors it, and the VML copy of the box is skipped
+        for para in iter_story(doc.body, P):
             print(extractText(para, text_boxes=False), file=out)
     return 0
 

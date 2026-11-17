@@ -30,7 +30,7 @@ book.add_chart("Sales", "pie", "A1:B4", anchor="N2", title="Q1 share", labels="p
 book.add_chart_sheet("Overview", "area", "Sales", "A1:D4", grouping="percent",
                      title="Share of quarter", number_format="0%")
 
-print([c["type"] for c in book.charts("Sales")])
+print([c.kind for c in book.charts("Sales")])
 # ['column', 'line_markers', 'pie']
 print(book.tab_names)                                # ['Sales', 'Overview']
 book.save("charts.xlsx")
@@ -39,7 +39,7 @@ book.save("charts.xlsx")
 The first row of the range names the series and the first column holds the categories
 (`series_in="rows"` reads series across rows instead). The chart's cached values are
 filled from the cells, so viewers that don't calculate show it right away. `anchor`
-is the top-left cell; `width` and `height` are in EMU. A chart sheet is a tab of its own.
+is the top-left cell; `width` and `height` are in points (or `Cm(15)` ...). A chart sheet is a tab of its own.
 
 ## In Word and PowerPoint
 
@@ -57,18 +57,18 @@ doc.add_chart("doughnut", ["Web", "Shop", "Phone"], {"Channel": [55, 30, 15]},
 
 deck = PresentationDocument.new()
 slide = deck.add_slide("Blank")
-deck.add_chart(slide, "scatter", [1, 2, 3, 4, 5],
-               {"Measured": [2.1, 3.9, 6.2, 7.8, 10.1]},
-               Inches(1), Inches(1), Inches(8), Inches(5), lines=True, smooth=True,
-               legend=None, title="Fit")
-print([c["type"] for c in doc.charts()], [c["type"] for c in deck.charts(slide)])
+deck.add_chart(slide, "scatter", [1, 2, 3, 4, 5], {"Measured": [2.1, 3.9, 6.2, 7.8, 10.1]},
+               x=Inches(1), y=Inches(1), width=Inches(8), height=Inches(5), lines=True,
+               smooth=True, legend=None, title="Fit")
+print([c.kind for c in doc.charts()], [c.kind for c in deck.charts(slide)])
 # ['column', 'doughnut'] ['scatter_smooth']
 ```
 
 The arguments are the kind, the categories, then the series as `{name: values}` (or a
 list of `oox.charts.Series` for per-series colours and kinds). In Word the chart is an
 inline picture in a new paragraph (`paragraph=` puts it in an existing one); on a slide
-it's a graphic frame at `x, y` with size `cx, cy`.
+it's a graphic frame at `x`, `y` with `width` and `height` (points or `Inches(…)`;
+by default it fills the slide's content area).
 
 ## Options
 
@@ -93,7 +93,7 @@ book.add_chart("Sales", "column", "A1:D5", anchor="N18", series_in="rows",
                y_title="EUR k", y2_title="Margin", y2_number_format="0%",
                title="Sales and margin")
 combo = book.charts("Sales")[-1]
-print([(s["name"], s["type"], s["axis"]) for s in combo["series"]][-2:])
+print([(s.name, s.kind, s.axis) for s in combo.series][-2:])
 # [('West', 'column', 'primary'), ('Margin', 'line_markers', 'secondary')]
 ```
 
@@ -105,7 +105,7 @@ and number format.
 
 ```python
 info = book.charts("Sales")[0]
-print(info["title"], info["legend"], info["series"][0]["values"])
+print(info.title, info.legend, info.series[0].values)
 # Quarterly sales bottom [120, 95, 80]
 ```
 

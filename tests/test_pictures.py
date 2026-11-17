@@ -91,7 +91,7 @@ def test_pptx_picture_shared_between_slides(tmp_path):
     deck = PresentationDocument.new()
     png = make("PNG")
     for _ in range(2):
-        deck.add_picture(deck.add_slide(), png, Inches(1), Inches(1), width=Inches(3))
+        deck.add_picture(deck.add_slide(), png, x=Inches(1), y=Inches(1), width=Inches(3))
     path = tmp_path / "p.pptx"
     deck.save(path)
     assert [n for n in deck.package.parts if "media" in n] == ["/ppt/media/image1.png"]
@@ -104,5 +104,5 @@ def test_pptx_picture_shared_between_slides(tmp_path):
 def test_odfpy_add_picture_returns_rid():
     doc = WordprocessingDocument.new()
     rid = doc.addPictureFromString(make("PNG"), "image/png")
-    assert doc.main_part.rels.items[rid].target == "media/image1.png"
+    assert doc.main_part.rels[rid].target == "media/image1.png"
     assert struct  # keep import for readers poking at headers

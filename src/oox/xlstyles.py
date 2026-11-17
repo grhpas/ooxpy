@@ -242,6 +242,7 @@ class StyleSheet:
 
     def xf(self, **fmt: Any) -> int:
         """Index into cellXfs for this combination of formatting."""
+        fmt = {k: v for k, v in fmt.items() if v is not None}  # None: not set (as read)
         unknown = set(fmt) - set(STYLE_OPTIONS)
         if unknown:
             raise TypeError(f"unknown cell style option {sorted(unknown)}; "
@@ -286,6 +287,7 @@ class StyleSheet:
         underline, strike, color, fill, border, border_color, number_format."""
         allowed = {"bold", "italic", "underline", "strike", "color", "fill", "border",
                    "border_color", "number_format"}
+        fmt = {k: v for k, v in fmt.items() if v is not None}  # None: not set (as read)
         unknown = set(fmt) - allowed
         if unknown:
             raise TypeError(f"unknown highlight option {sorted(unknown)}; known: {sorted(allowed)}")

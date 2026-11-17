@@ -30,10 +30,10 @@ def test_openpyxl_chart_values_come_from_the_cells(tmp_path):
     path = next(f for f in build(tmp_path) if f.name == "openpyxl_features.xlsx")
     book = open_document(path)
     charts = book.charts("Sales")
-    assert [c["type"] for c in charts] == ["column", "line", "pie"]
-    assert [s["name"] for s in charts[0]["series"]] == ["North", "South"]
-    assert charts[0]["series"][1]["values"] == [7, 9, 11, 8]
-    assert charts[0]["categories"] == ["M1", "M2", "M3", "M4"]
+    assert [c.kind for c in charts] == ["column", "line", "pie"]
+    assert [s.name for s in charts[0].series] == ["North", "South"]
+    assert charts[0].series[1].values == [7, 9, 11, 8]
+    assert charts[0].categories == ["M1", "M2", "M3", "M4"]
 
 
 def test_xlsxwriter_secondary_axis_and_combination_are_read(tmp_path):
@@ -43,8 +43,8 @@ def test_xlsxwriter_secondary_axis_and_combination_are_read(tmp_path):
     path = next(f for f in build(tmp_path) if f.name == "xlsxwriter_features.xlsx")
     charts = open_document(path).charts("Data")
     line, combo = charts[1], charts[2]
-    assert [s["axis"] for s in line["series"]] == ["primary", "secondary"]
-    assert [(s["type"], s["axis"]) for s in combo["series"]] == [
+    assert [s.axis for s in line.series] == ["primary", "secondary"]
+    assert [(s.kind, s.axis) for s in combo.series] == [
         ("column", "primary"), ("line", "secondary")]
 
 
@@ -97,9 +97,9 @@ def test_python_pptx_reads_oox_output(tmp_path):
     s1 = deck.add_slide("Title Slide")
     deck.set_placeholder_text(s1, "ctrTitle", "From oox")
     s2 = deck.add_slide("Blank")
-    deck.add_table(s2, [["h1", "h2"], ["1", "2"]], Inches(1), Inches(1), Inches(4))
+    deck.add_table(s2, [["h1", "h2"], ["1", "2"]], x=Inches(1), y=Inches(1), width=Inches(4))
     deck.add_chart(s2, "column", ["a", "b"], {"S": [1, 2]})
-    deck.add_picture(s2, _png(), Inches(1), Inches(4), width=Inches(1))
+    deck.add_picture(s2, _png(), x=Inches(1), y=Inches(4), width=Inches(1))
     deck.set_notes(s2, "Speaker notes")
     got = readback(_save(deck, tmp_path / "oox.pptx"))
     assert got["texts"][0] == ["From oox", ""]          # the empty subtitle placeholder

@@ -57,3 +57,11 @@ lxml; Office and LibreOffice are only used to verify the library.
 **Can I use it on untrusted uploads?** Opening is bounded by `Limits` (zip bombs, huge
 parts, DTDs are refused) and every failure is a `PackageError`. See
 [Existing files](guide/existing-files.md).
+
+**How big is it, and does it work with PyInstaller?** The installed package is about
+12 MB: about 5.5 MB of grammar tables, 2 MB of type stubs for editors, and the
+element factories. The grammar for a namespace is loaded the first time it's used, so
+a script that only writes Word documents doesn't load Excel's tables. oox imports
+those modules by name, which PyInstaller can't see on its own; oox ships a PyInstaller
+hook that lists them, found automatically, so `pyinstaller app.py` needs no extra
+options. The stubs are not bundled.

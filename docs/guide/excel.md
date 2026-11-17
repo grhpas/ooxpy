@@ -78,7 +78,7 @@ book.set_value("Sales", "E3", Formula("C3/B3", 0.305), style={"number_format": "
 
 print(book.display_text("Sales", "C3"))          # 30.50
 print(book.display_text("Sales", "E3"))          # 30.5%
-print(book.cell_format("Sales", "A1")["fill"])   # 2F5496
+print(book.cell_format("Sales", "A1").fill)   # 2F5496
 ```
 
 `cell_style` returns a shared style index: equal styles share one entry, and entries
@@ -102,7 +102,7 @@ book.set_row_height("Sales", 1, 24)               # points
 book.autofit_columns("Sales", "D:F")
 book.merge_cells("Sales", "A6:C6")
 book.set_value("Sales", "A6", "Preliminary figures")
-book.freeze_panes("Sales", "B2")                  # first row and column stay visible
+book.set_frozen_panes("Sales", "B2")                  # first row and column stay visible
 book.auto_filter("Sales", "A1:F4")
 book.define_name("Actuals", "Sales", "C2:C4")
 book.add_validation("Sales", "A2:A4", values=["North", "South", "West", "East"])
@@ -120,7 +120,7 @@ book.conditional_format("Sales", "E2:E4", "data_bar", color="638EC6")
 book.conditional_format("Sales", "B2:B4", "icon_set", icons="3Arrows")
 book.conditional_format("Sales", "A2:A4", "text", text="North", style={"bold": True})
 
-print([rule["type"] for rule in book.conditional_formats("Sales")])
+print([rule.rule for rule in book.conditional_formats("Sales")])
 ```
 
 Rules: `cell` (with `operator` and `value`), `formula`, `color_scale`, `data_bar`,
@@ -139,7 +139,7 @@ orders.add_table("Orders", "A1:C4", name="Orders2026",
                  totals={"Region": "Total", "Units": "sum", "Amount": "sum"})
 orders.set_value("Orders", "E1", Formula("SUM(Orders2026[Amount])", 2640.5))
 
-print(orders.tables("Orders")[0]["ref"])          # A1:C5: the totals row was added
+print(orders.tables("Orders")[0].ref)          # A1:C5: the totals row was added
 print(orders.value("Orders", "C5"))               # 2640.5, computed by oox
 ```
 
@@ -162,11 +162,11 @@ print(book.hyperlinks("Sales"))
 ## Printing and sheet options
 
 ```python
-book.page_setup("Sales", orientation="landscape", paper="A4", fit_width=1,
+book.set_page_setup("Sales", orientation="landscape", paper="A4", fit_width=1,
                 repeat_rows="1:1", footer={"right": "Page {page} of {pages}"})
-book.sheet_options("Sales", tab_color="2F5496", zoom=120)
-book.sheet_options("Lookup", hidden=True)          # "very" hides it from Unhide too
-print(book.page_setup_info("Sales")["orientation"], book.sheet_options_info("Lookup"))
+book.set_sheet_options("Sales", tab_color="2F5496", zoom=120)
+book.set_sheet_options("Lookup", hidden=True)          # "very" hides it from Unhide too
+print(book.page_setup("Sales").orientation, book.sheet_options("Lookup"))
 ```
 
 ## Protection
@@ -192,7 +192,7 @@ from oox.units import Cm
 book.add_picture("Sales", "logo.png", anchor="J2", width=Cm(4))
 book.add_chart("Sales", "column", "A1:C4", anchor="J8", title="Target and actual",
                legend="bottom")
-print(book.charts("Sales")[0]["type"])            # column
+print(book.charts("Sales")[0].kind)            # column
 ```
 
 Charts take their data from cell ranges: the header row names the series and the

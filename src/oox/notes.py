@@ -1,7 +1,7 @@
 """Hyperlinks, bookmarks, footnotes, endnotes and comments.
 
     p = doc.add_paragraph("See ")
-    doc.add_hyperlink(p, "the spec", url="https://ecma-international.org/")
+    doc.add_hyperlink(p, "the spec", target="https://ecma-international.org/")
     doc.add_bookmark("results", doc.add_heading("Results", 1))
     doc.add_hyperlink(p, "the results", anchor="results")      # internal link
     doc.add_footnote(p, "A footnote.")
@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 from .element import OoxElement
 from .grammar import URI
 from .ns import w
+from .records import Comment, Hyperlink, Note
 
 if TYPE_CHECKING:
     from .document import WordprocessingDocument
@@ -55,15 +56,15 @@ def _source_part(doc: WordprocessingDocument, el: OoxElement):
 
 # -- hyperlinks and bookmarks ----------------------------------------------------------
 def add_hyperlink(doc: WordprocessingDocument, paragraph: OoxElement, text: str, *,
-                  url: str | None = None, anchor: str | None = None,
+                  target: str | None = None, anchor: str | None = None,
                   tooltip: str | None = None) -> OoxElement:
-    if (url is None) == (anchor is None):
-        raise ValueError("give exactly one of url= (external) or anchor= (bookmark name)")
+    if (target is None) == (anchor is None):
+        raise ValueError("give exactly one of target= (a URL) or anchor= (a bookmark name)")
     doc.ensure_style("Hyperlink")
     attrs: dict[str, Any] = {}
-    if url is not None:
+    if target is not None:
         part = _source_part(doc, paragraph)
-        attrs["r_id"] = part.rels.add(RT_HYPERLINK, url, external=True)
+        attrs["r_id"] = part.rels.add(RT_HYPERLINK, target, external=True)
     else:
         attrs["anchor"] = anchor
     if tooltip:
@@ -95,26 +96,32 @@ def add_bookmark(doc: WordprocessingDocument, name: str, paragraph: OoxElement) 
     return start
 
 
-def hyperlinks(doc: WordprocessingDocument) -> list[tuple[str, str]]:
-    """``(text, target)`` for each hyperlink in the body; target is the URL or
-    ``#bookmark``."""
+def hyperlinks(doc: WordprocessingDocument) -> list[Hyperlink]:
+    """A ``Hyperlink`` for each link in the body: ``target`` the URL, or
+    ``anchor`` the bookmark (kind "url" or "bookmark")."""
     from . import teletype
+    from .walk import iter_story
 
     out = []
-    for link in doc.body.iter(f"{{{W}}}hyperlink"):
+    for link in iter_story(doc.body, f"{{{W}}}hyperlink"):
         rid = link.get(f"{{{R}}}id")
+        tip = link.get(f"{{{W}}}tooltip")
+        text = teletype.extractText(link)
         if rid:
-            rel = doc.main_part.rels.items.get(rid)
-            target = rel.target if rel is not None else ""
+            rel = doc.main_part.rels.get(rid)
+            out.append(Hyperlink(text, target=rel.target if rel is not None else None,
+                                 anchor=link.get(f"{{{W}}}anchor"), tooltip=tip))
         else:
-            target = "#" + (link.get(f"{{{W}}}anchor") or "")
-        out.append((teletype.extractText(link), target))
+            out.append(Hyperlink(text, anchor=link.get(f"{{{W}}}anchor") or "", tooltip=tip,
+                                 kind="bookmark"))
     return out
 
 
 def bookmarks(doc: WordprocessingDocument) -> list[str]:
     """Bookmark names, without Word's hidden ones (``_GoBack``, ``_Toc...``)."""
-    return [b.get(f"{{{W}}}name") or "" for b in doc.document.iter(f"{{{W}}}bookmarkStart")
+    from .walk import iter_story
+
+    return [b.get(f"{{{W}}}name") or "" for b in iter_story(doc.document, f"{{{W}}}bookmarkStart")
             if not (b.get(f"{{{W}}}name") or "").startswith("_")]
 
 
@@ -151,7 +158,7 @@ def _notes_root(doc: WordprocessingDocument, kind: str, create: bool) -> OoxElem
                         spec.note(cont, type="continuationSeparator", id=0))
     doc.add_part(spec.part, element=root)
     # Word lists the separator notes in settings
-    doc.settings.add(spec.props(spec.note(id=-1), spec.note(id=0)), replace=True)
+    doc.ensure_settings().add(spec.props(spec.note(id=-1), spec.note(id=0)), replace=True)
     return root
 
 
@@ -182,14 +189,14 @@ def add_endnote(doc: WordprocessingDocument, paragraph: OoxElement, text: str) -
     return _add_note(doc, "endnote", paragraph, text)
 
 
-def notes(doc: WordprocessingDocument, kind: str) -> list[tuple[int, str]]:
-    """``(id, text)`` of real notes (separators excluded)."""
+def notes(doc: WordprocessingDocument, kind: str) -> list[Note]:
+    """A ``Note`` (id, text) for each real note (separators excluded)."""
     from . import teletype
 
     root = _notes_root(doc, kind, create=False)
     if root is None:
         return []
-    return [(int(n.get(f"{{{W}}}id", "0")), teletype.extractText(n).strip())
+    return [Note(int(n.get(f"{{{W}}}id", "0")), teletype.extractText(n).strip())
             for n in root.iterchildren(f"{{{W}}}{kind}")
             if n.get(f"{{{W}}}type") in (None, "normal")]
 
@@ -239,18 +246,22 @@ def add_comment(doc: WordprocessingDocument, paragraph: OoxElement, text: str, *
     return comment
 
 
-def comments(doc: WordprocessingDocument) -> list[dict[str, object]]:
-    """``{"id", "author", "text", "anchor"}`` for each comment; ``anchor`` is
-    the commented text in the body."""
+def comments(doc: WordprocessingDocument) -> list[Comment]:
+    """A ``Comment`` for each comment; ``anchor_text`` is the commented text
+    in the body."""
     from . import teletype
 
     root = _comments_root(doc, create=False)
     if root is None:
         return []
+    from .walk import iter_story
+
     anchors: dict[str, str] = {}
-    for p in doc.body.iter(f"{{{W}}}p"):
+    for p in iter_story(doc.body, f"{{{W}}}p"):
         for start in p.iter(f"{{{W}}}commentRangeStart"):
             anchors[start.get(f"{{{W}}}id") or ""] = teletype.extractText(p)
-    return [{"id": int(c.get(f"{{{W}}}id", "0")), "author": c.get(f"{{{W}}}author"),
-             "text": teletype.extractText(c), "anchor": anchors.get(c.get(f"{{{W}}}id") or "", "")}
+    return [Comment(teletype.extractText(c), author=c.get(f"{{{W}}}author"),
+                    date=c.get(f"{{{W}}}date"), initials=c.get(f"{{{W}}}initials"),
+                    anchor_text=anchors.get(c.get(f"{{{W}}}id") or "", ""),
+                    id=int(c.get(f"{{{W}}}id", "0")))
             for c in root.iterchildren(f"{{{W}}}comment")]

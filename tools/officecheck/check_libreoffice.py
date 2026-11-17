@@ -71,20 +71,22 @@ def _continues(tc):
 
 
 def _chart_attr(info, attr, series=1):
-    """chart_info -> the value a chart probe asks for (same terms as check_office.com_chart)."""
-    if attr in ("type", "title", "legend", "x_title", "y_title", "y2_title", "labels"):
-        return info[attr]
+    """A Chart record -> the value a chart probe asks for (same terms as check_office.com_chart)."""
+    if attr == "type":
+        return info.kind
+    if attr in ("title", "legend", "x_title", "y_title", "y2_title", "labels"):
+        return getattr(info, attr)
     if attr == "series":
-        return [s["name"] for s in info["series"]]
-    ser = info["series"][series - 1]
+        return [s.name for s in info.series]
+    ser = info.series[series - 1]
     if attr == "series_type":
-        return ser["type"]
+        return ser.kind
     if attr == "axis":
-        return ser["axis"]
+        return ser.axis
     if attr == "values":
-        return ser["values"]
+        return list(ser.values)
     if attr == "categories":
-        return ser["categories"]
+        return list(ser.categories) if ser.categories is not None else None
     raise ValueError("unknown chart attribute %r" % attr)
 
 
@@ -128,13 +130,15 @@ class LoWord:
 
     def list_string(self, paragraph):
         ps = list(self.doc.document.iter(f"{{{URI['w']}}}p"))
-        labels = {id(p): lab for p, lab in self.doc.list_labels()}
+        labels = {id(item.paragraph): item.raw_label for item in self.doc.list_labels()}
         return labels.get(id(ps[paragraph - 1]), "")
 
     def outline_level(self, paragraph):
         """Direct w:outlineLvl, else the paragraph style's (following basedOn); 10 = body."""
         ps = list(self.doc.document.iter(f"{{{URI['w']}}}p"))[paragraph - 1]
-        styles = {s.get(f"{{{URI['w']}}}styleId"): s for s in self.doc.styles.iterchildren(f"{{{URI['w']}}}style")}
+        root = self.doc.styles
+        styles = {} if root is None else {
+            s.get(f"{{{URI['w']}}}styleId"): s for s in root.iterchildren(f"{{{URI['w']}}}style")}
 
         def level_of(el, depth=0):
             ppr = el.first("w:pPr")
@@ -154,7 +158,7 @@ class LoWord:
         return {"sections": lambda: len(d.sections), "hyperlinks": lambda: len(d.hyperlinks()),
                 "bookmarks": lambda: len(d.bookmarks()), "footnotes": lambda: len(d.footnotes()),
                 "endnotes": lambda: len(d.endnotes()), "comments": lambda: len(d.comments()),
-                "revisions": lambda: len([r for r in d.revisions() if r["kind"] in
+                "revisions": lambda: len([r for r in d.revisions() if r.kind in
                                           ("insert", "delete")]),
                 "controls": lambda: len(d.content_controls()),
                 "toc": lambda: field_codes(d.body).count("TOC")}[what]()
@@ -177,15 +181,16 @@ class LoWord:
         return field_codes(self._hf(part, section, kind))
 
     def hyperlink(self, index):
-        return self.doc.hyperlinks()[index - 1][1]
+        link = self.doc.hyperlinks()[index - 1]
+        return link.target if link.target is not None else "#" + str(link.anchor)
 
     def note_text(self, kind, index):
         found = self.doc.footnotes() if kind == "footnote" else self.doc.endnotes()
-        return found[index - 1][1]
+        return found[index - 1].text
 
     def comment(self, index):
         c = self.doc.comments()[index - 1]
-        return c["author"], c["text"]
+        return c.author, c.text
 
     def custom_property(self, name):
         return self.doc.custom_properties.get(name)
@@ -204,20 +209,17 @@ class LoWord:
             pos += n
         fmt = self.doc.effective_format(p, target)
         if attr == "underline":
-            return fmt.get("underline") is not None
+            return fmt.underline is not None
         if attr in ("subscript", "superscript", "small_caps", "strike", "bold", "italic"):
-            return bool(fmt.get(attr))
+            return bool(getattr(fmt, attr))
         if attr == "size":
-            return round(fmt["size"], 1)
-        return fmt.get(attr)
+            return round(fmt.size, 1)
+        return getattr(fmt, attr)
 
     def paragraph_format(self, paragraph, attr):
-        fmt = self.doc.effective_format(self._paragraph(paragraph))
-        if attr in ("indent_left", "first_line"):
-            return round(fmt.get(attr, 0) / 20, 1)
-        if attr in ("space_before", "space_after"):
-            return round(fmt.get(attr, 0), 1)
-        return fmt.get(attr)
+        fmt = self.doc.formatting().paragraph(self._paragraph(paragraph))
+        value = getattr(fmt, attr)
+        return round(value, 1) if isinstance(value, float) else value
 
     def field_results(self, codes, update=False):
         """Cached results as LibreOffice wrote them back.  ``update`` is not
@@ -225,18 +227,18 @@ class LoWord:
         DOCPROPERTY), so recomputing would test LibreOffice's export rather
         than oox.  oox's own recompute is covered by the unit tests; the
         Word side compares it with Word's."""
-        return [f["result"] for f in self.doc.fields() if f["name"] in codes]
+        return [f.result for f in self.doc.fields() if f.name in codes]
 
     def control(self, tag):
-        info = next(c for c in self.doc.content_controls() if c["tag"] == tag)
-        text = info["value"]
-        if info["type"] == "checkbox":
-            text = "\u2612" if info["value"] else "\u2610"
+        info = next(c for c in self.doc.content_controls() if c.tag == tag)
+        text = info.value
+        if info.type == "checkbox":
+            text = "\u2612" if info.value else "\u2610"
         elif text is None:  # placeholder showing: the placeholder text
             sdt = next(s for s in self.doc.document.iter(f"{{{URI['w']}}}sdt")
                        if s.find(f".//{{{URI['w']}}}tag").get(f"{{{URI['w']}}}val") == tag)
             text = teletype.extractText(sdt.first("w:sdtContent"))
-        return {"text": text, "type": info["type"], "placeholder": info["placeholder"]}
+        return {"text": text, "type": info.type, "placeholder": info.placeholder}
 
     def table(self, table, what):
         t = self.doc.tables()[table - 1]
@@ -256,13 +258,13 @@ class LoWord:
         return teletype.extractText(tc)
 
     def shapes_count(self):
-        return sum(1 for p in self.doc.pictures() if p["floating"])
+        return sum(1 for p in self.doc.pictures() if p.floating)
 
     def shape_wraps(self):
-        return sorted(p["wrap"] for p in self.doc.pictures() if p["floating"])
+        return sorted(p.wrap for p in self.doc.pictures() if p.floating)
 
     def text_boxes(self):
-        return [b["text"] for b in self.doc.text_boxes() if b["text"]]
+        return [b.text for b in self.doc.text_boxes() if b.text]
 
     def _dropped_tracked_changes(self):
         """LibreOffice (24.2) doesn't import tracked-changes protection, so its
@@ -270,14 +272,14 @@ class LoWord:
         if self.doc.protection() is not None or self.source is None:
             return None
         original = open_document(self.source).protection()
-        if original and original["edit"] == "trackedChanges":
+        if original and original.edit == "trackedChanges":
             return NotJudged("LibreOffice doesn't keep tracked-changes protection")
         return None
 
     def protection(self):
         info = self.doc.protection()
         return self._dropped_tracked_changes() or (
-            info["edit"] if info and info["enforced"] else "none")
+            info.edit if info and info.enforced else "none")
 
     def unprotect(self, wrong, password):
         return self._dropped_tracked_changes() or _unprotect(
@@ -285,8 +287,8 @@ class LoWord:
             self.protection)
 
     def revision(self, index):
-        r = [x for x in self.doc.revisions() if x["kind"] in ("insert", "delete")][index - 1]
-        return r["kind"], r["author"], r["text"]
+        r = [x for x in self.doc.revisions() if x.kind in ("insert", "delete")][index - 1]
+        return r.kind, r.author, r.text
 
     def text_after(self, action):
         if action == "accept":
@@ -312,20 +314,20 @@ class LoExcel:
 
     def font(self, sheet, ref, attr):
         fmt = self.book.cell_format(sheet, ref)
-        return round(fmt["size"], 1) if attr == "size" else fmt[attr]
+        return round(fmt.size, 1) if attr == "size" else getattr(fmt, attr)
 
     def fill(self, sheet, ref):
-        return self.book.cell_format(sheet, ref)["fill"]
+        return self.book.cell_format(sheet, ref).fill
 
     def align(self, sheet, ref):
-        return self.book.cell_format(sheet, ref)["align"] or "general"
+        return self.book.cell_format(sheet, ref).align or "general"
 
     def number_format(self, sheet, ref):
         """LibreOffice escapes literal punctuation on export (yyyy\\-mm\\-dd):
         the same code, so compare it unescaped."""
         import re
 
-        code = self.book.cell_format(sheet, ref)["number_format"]
+        code = self.book.cell_format(sheet, ref).number_format or "General"
         return re.sub(r"\\([^A-Za-z0-9])", r"\1", code)
 
     def column_width(self, sheet, col):
@@ -385,8 +387,8 @@ class LoExcel:
 
     def cf_types(self, sheet, ref):
         alias = {"uniqueValues": "duplicateValues"}
-        return sorted(str(alias.get(r["type"], r["type"])) for r in self.book.conditional_formats(sheet)
-                      if self._covers(r["range"], ref))
+        return sorted(str(alias.get(r.type, r.type)) for r in self.book.conditional_formats(sheet)
+                      if self._covers(r.ref, ref))
 
     def tabs(self):
         return self.book.tab_names
@@ -395,16 +397,16 @@ class LoExcel:
         """LibreOffice (24.2) doesn't import workbook structure protection: its
         re-save has an empty x:workbookProtection.  Check the original instead."""
         info = self.book.workbook_protection()
-        if (info and any(info.values())) or self.source is None:
+        if (info and (info.structure or info.windows or info.password)) or self.source is None:
             return None
         original = open_document(self.source).workbook_protection()
-        if original and any(original.values()):
+        if original and (original.structure or original.windows or original.password):
             return NotJudged("LibreOffice doesn't keep workbook structure protection")
         return None
 
     def workbook_protection(self, attr):
         return self._dropped_workbook_protection() or bool(
-            (self.book.workbook_protection() or {}).get(attr))
+            getattr(self.book.workbook_protection(), attr, False))
 
     def unprotect_workbook(self, wrong, password):
         return self._dropped_workbook_protection() or _unprotect(
@@ -415,16 +417,16 @@ class LoExcel:
         return _chart_attr(self.book.charts(name)[0], attr, series)
 
     def table_names(self, sheet):
-        return sorted(t["name"] for t in self.book.tables(sheet))
+        return sorted(t.name for t in self.book.tables(sheet))
 
     def table(self, sheet, name, attr):
 
 
         if attr == "style":
             return NotJudged("LibreOffice doesn't keep table styles")
-        t = next(t for t in self.book.tables(sheet) if t["name"] == name)
-        return {"ref": t["ref"], "totals": t["totals"], "columns": t["columns"],
-                "style": t["style"]}[attr]
+        t = next(t for t in self.book.tables(sheet) if t.name == name)
+        return {"ref": t.ref, "totals": t.totals_row, "columns": t.columns,
+                "style": t.style}[attr]
 
     def comment_count(self, sheet):
         return len(self.book.comments(sheet))
@@ -432,34 +434,37 @@ class LoExcel:
     def comment(self, sheet, ref):
 
 
-        _, text = self.book.comments(sheet).get(ref, (None, None))
+        found = self.book.comments(sheet).get(ref)
+        text = found.text if found is not None else None
         return NotJudged("LibreOffice writes comment authors as 'Unknown Author'"), text
 
     def hyperlink(self, sheet, ref):
-        return self.book.hyperlinks(sheet).get(ref)
+        found = self.book.hyperlinks(sheet).get(ref)
+        return found.target if found is not None else None
 
     def page(self, sheet, attr):
-        info = self.book.page_setup_info(sheet)
-        if attr in ("print_area", "print_titles"):
-            val = info.get(attr) or ""
-            return val.split("!")[-1].replace("$", "")
+        info = self.book.page_setup(sheet)
+        if attr == "print_area":
+            return info.print_area or ""
+        if attr == "print_titles":
+            return ",".join(v for v in (info.repeat_cols, info.repeat_rows) if v)
         if attr.startswith(("header_", "footer_")):
             kind, _, side = attr.partition("_")
-            text = info.get(kind, {}).get(side, "")
+            text = (getattr(info, kind) or {}).get(side, "")
             # back to Excel's codes, which COM returns
             text = text.replace("&", "&&")
             for name, code in (("{page}", "&P"), ("{pages}", "&N"), ("{date}", "&D"),
                                ("{sheet}", "&A"), ("{file}", "&F"), ("{time}", "&T")):
                 text = text.replace(name, code)
             return text
-        return info.get(attr)
+        return getattr(info, attr)
 
     def sheet_option(self, sheet, attr):
         if attr == "tab_color":
 
 
             return NotJudged("LibreOffice drops tab colours on export")
-        return self.book.sheet_options_info(sheet)[attr]
+        return getattr(self.book.sheet_options(sheet), attr)
 
     def validation(self, sheet, ref):
         from oox.spreadsheet import split_ref
@@ -467,10 +472,10 @@ class LoExcel:
 
         col, rw = split_ref(ref)
         for v in self.book.validations(sheet):
-            for part in v["range"].split():
+            for part in v.ref.split():
                 c1, r1, c2, r2 = parse_range(part)
                 if c1 <= col <= c2 and r1 <= rw <= r2:
-                    return ",".join(v["values"]) if "values" in v else v.get("source")
+                    return ",".join(v.values) if v.values is not None else v.source
         return None
 
     def __init__(self, book):
@@ -519,7 +524,7 @@ class LoPowerPoint:
         return self.deck.slide_layout(self._slide(slide))
 
     def table(self, slide, attr, row=None, col=None):
-        rows = self.deck.tables(self._slide(slide))[0]["rows"]
+        rows = self.deck.tables(self._slide(slide))[0].rows
         if attr == "rows":
             return len(rows)
         if attr == "cols":
@@ -534,31 +539,31 @@ class LoPowerPoint:
         found = self.deck.sections()
         if not found:
             return NotJudged("LibreOffice doesn't keep slide sections")
-        return [[name, members[0] if members else 0, len(members)] for name, members in found]
+        return [[s.name, s.slides[0] if s.slides else 0, len(s.slides)] for s in found]
 
     def links(self, slide):
         out = []
         for lk in self.deck.links(self._slide(slide)):
-            if lk["kind"] == "url":
-                out.append(lk["target"])
-            elif lk["kind"] == "slide":
-                out.append("slide:%s" % lk["target"])
+            if lk.kind == "url":
+                out.append(lk.target)
+            elif lk.kind == "slide":
+                out.append("slide:%s" % lk.anchor)
         return out
 
     def action(self, slide, shape):
         for lk in self.deck.links(self._slide(slide)):
-            if lk["shape"] == shape and lk["text"] is None:
-                return lk["target"] if lk["kind"] == "jump" else "hyperlink"
+            if lk.shape == shape and lk.text is None:
+                return lk.target if lk.kind == "jump" else "hyperlink"
         return "none"
 
     def notes(self, slide):
         return self.deck.notes(self._slide(slide))
 
     def shape_types(self, slide):
-        return [s["geometry"] for s in self.deck.shapes(self._slide(slide)) if s["kind"] == "shape"]
+        return [s.geometry for s in self.deck.shapes(self._slide(slide)) if s.kind == "shape"]
 
     def picture_placeholder(self, slide):
-        kinds = [s["kind"] for s in self.deck.shapes(self._slide(slide))]
+        kinds = [s.kind for s in self.deck.shapes(self._slide(slide))]
         if "picture" in kinds:
             return NotJudged("LibreOffice saves a filled placeholder as a plain picture")
         return False

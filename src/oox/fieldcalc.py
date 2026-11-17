@@ -7,7 +7,7 @@ field results without Word.
     doc.add_cross_reference(p, cap, what="page")     # page estimate
     doc.add_field(p, "TITLE")                        # the document title
     doc.update_fields()                              # renumber, refresh references
-    doc.fields()                                     # [{"name": "SEQ", "code": ..., "result": "1"}, ...]
+    doc.fields()                                     # [Field(code="SEQ Figure ...", result="1"), ...]
 
 Word stores a field's last result in the file and only recomputes it on F9 or
 printing, so the file has to carry correct results.  ``update_fields``
@@ -54,6 +54,9 @@ def _q(local: str) -> str:
 # -- scanning ----------------------------------------------------------------------------------
 @dataclass
 class Field:
+    """A field: its ``code`` ("SEQ Figure \\* ARABIC"), ``name`` ("SEQ"),
+    cached ``result``, ``kind`` ("simple" or "complex") and elements."""
+
     code: str
     kind: str                      # "simple" or "complex"
     element: OoxElement            # w:fldSimple, or the begin w:fldChar
@@ -105,13 +108,17 @@ def tokens(code: str) -> list[str]:
     return out
 
 
-def scan(root: OoxElement) -> list[Field]:
+def scan(root: OoxElement, all_copies: bool = False) -> list[Field]:
     """Fields under ``root`` in document order (nested fields included, outer
-    first), with their current results."""
+    first), with their current results.  Text boxes count once, as Word shows
+    them (``oox.walk``); ``all_copies=True`` also scans the copies Word keeps
+    for older readers."""
+    from .walk import iter_story
+
     out: list[Field] = []
     stack: list[dict[str, Any]] = []
-    for el in root.iter(_q("fldSimple"), _q("fldChar"), _q("instrText"), _q("t"),
-                        _q("tab"), _q("br"), _q("p")):
+    tags = (_q("fldSimple"), _q("fldChar"), _q("instrText"), _q("t"), _q("tab"), _q("br"), _q("p"))
+    for el in (root.iter(*tags) if all_copies else iter_story(root, *tags)):
         local = el.tag.rpartition("}")[2]
         if local == "fldSimple":
             from . import teletype
@@ -303,9 +310,12 @@ def _apply_case(text: str, args: list[str]) -> str:
 def bookmark_texts(root: OoxElement) -> dict[str, str]:
     """Text inside each bookmark (by name); paragraphs joined with newlines.
     Deleted text (``w:delText``) and field codes aren't text, so they don't count."""
+    from .walk import iter_story
+
     out: dict[str, str] = {}
     open_: dict[str, tuple[str, list[str]]] = {}
-    for el in root.iter(_q("bookmarkStart"), _q("bookmarkEnd"), _q("t"), _q("tab"), _q("p")):
+    for el in iter_story(root, _q("bookmarkStart"), _q("bookmarkEnd"), _q("t"), _q("tab"),
+                         _q("p")):
         local = el.tag.rpartition("}")[2]
         if local == "bookmarkStart":
             open_[el.get(_q("id")) or ""] = (el.get(_q("name")) or "", [])
@@ -325,12 +335,14 @@ def bookmark_texts(root: OoxElement) -> dict[str, str]:
 
 def _page_estimates(root: OoxElement) -> dict[str, int]:
     """Bookmark name -> estimated page number."""
+    from .walk import iter_story
+
     rendered = root.find(f".//{_q('lastRenderedPageBreak')}") is not None
     page, out = 1, {}
-    section_types = [sp.first("w:type") for sp in root.iter(_q("sectPr"))]
+    section_types = [sp.first("w:type") for sp in iter_story(root, _q("sectPr"))]
     sect_index = 0
-    for el in root.iter(_q("bookmarkStart"), _q("br"), _q("lastRenderedPageBreak"),
-                        _q("pageBreakBefore"), _q("sectPr")):
+    for el in iter_story(root, _q("bookmarkStart"), _q("br"), _q("lastRenderedPageBreak"),
+                         _q("pageBreakBefore"), _q("sectPr")):
         local = el.tag.rpartition("}")[2]
         if local == "bookmarkStart":
             out.setdefault(el.get(_q("name")) or "", page)
@@ -382,16 +394,31 @@ def update_fields(doc: WordprocessingDocument, *, now: _dt.datetime | None = Non
                   only: set[str] | None = None) -> dict[str, int]:
     """Recompute field results that don't need page layout; returns
     ``{field name: number updated}``.  ``only`` limits it to some names."""
+    from .walk import twins
+
     counts: dict[str, int] = {}
+    root = doc.document
+    # Numbers and references come from the copy of each text box Word shows;
+    # every result is written into the copy kept for older readers too
+    # (the n-th field of one copy is the n-th of the other).
+    twin_of: dict[int, Field] = {}
+    keep_alive: list[Field] = []  # keeps the element proxies (and so their ids) stable
+    for shown, hidden in twins(root):
+        a, b = scan(shown), scan(hidden)
+        if len(a) == len(b):
+            keep_alive += a
+            twin_of.update({id(x.element): y for x, y in zip(a, b, strict=True)})
 
     def done(f: Field, text: str) -> None:
         if f.result != text and set_result(f, text):
             counts[f.name] = counts.get(f.name, 0) + 1
+        twin = twin_of.get(id(f.element))
+        if twin is not None and twin.result != text:
+            set_result(twin, text)
 
     def wanted(name: str) -> bool:
         return only is None or name in only
 
-    root = doc.document
     # 1. SEQ numbering, in document order
     seq: dict[str, int] = {}
     for f in scan(root):
@@ -579,13 +606,12 @@ def add_field(doc: WordprocessingDocument, paragraph: OoxElement, instr: str,
     return el
 
 
-def fields(doc: WordprocessingDocument, all_stories: bool = False) -> list[dict[str, str]]:
-    """``{"name", "code", "result"}`` for the body's fields (``all_stories``
-    adds headers, footers, notes and comments)."""
+def fields(doc: WordprocessingDocument, all_stories: bool = False) -> list[Field]:
+    """A ``Field`` (name, code, result, kind, element) for each field in the
+    body (``all_stories`` adds headers, footers, notes and comments)."""
     roots = [doc.document]
     if all_stories:
         for part_type in ("HeaderPart", "FooterPart", "FootnotesPart", "EndnotesPart",
                           "WordprocessingCommentsPart"):
             roots += [p.element for p in doc.related_parts(doc.main_part, part_type)]
-    return [{"name": f.name, "code": f.code, "result": f.result}
-            for root in roots for f in scan(root)]
+    return [f for root in roots for f in scan(root)]

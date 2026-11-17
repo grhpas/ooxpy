@@ -86,7 +86,7 @@ last = len(orders) + 1
 book.add_table("Orders", f"A1:D{last}", name="Orders",
                totals={"Date": "Total", "Amount": "sum"})
 book.style_range("Orders", f"C2:C{last + 1}", number_format="#,##0.00;[Red]-#,##0.00")
-book.freeze_panes("Orders", "A2")
+book.set_frozen_panes("Orders", "A2")
 book.autofit_columns("Orders")
 book.save("orders.xlsx")
 print(book.display_text("Orders", f"C{last + 1}"))      # 2,110.50
@@ -141,8 +141,8 @@ def text_of(path) -> str:
         return "\n".join("\t".join("" if v is None else str(v) for v in row)
                          for name in doc.sheet_names for row in doc.values(name))
     assert isinstance(doc, PresentationDocument)
-    return "\n".join(s["text"] for slide in doc.slides for s in doc.shapes(slide)
-                     if s["text"])
+    return "\n".join(s.text for slide in doc.slides for s in doc.shapes(slide)
+                     if s.text)
 
 
 for name in ("sales-report.docx", "orders.xlsx", "status.pptx"):

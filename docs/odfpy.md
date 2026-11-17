@@ -72,7 +72,7 @@ Some things can't look the same in any library, because the formats differ:
 |---|---|
 | nested `List` / `ListItem` | each paragraph points at a numbering definition: `lst = doc.new_list("decimal")`, `lst.add(text, level)` |
 | notes inline in the paragraph | notes live in their own part: `doc.add_footnote(p, text)` |
-| `A(href=…)` | a relationship plus `w:hyperlink`: `doc.add_hyperlink(p, text, url=…)` |
+| `A(href=…)` | a relationship plus `w:hyperlink`: `doc.add_hyperlink(p, text, target=…)` |
 | page styles with header and footer | per section, with first/even variants: `doc.sections[0].header_text("… {PAGE} …")` |
 | `numbercolumnsspanned` + covered cells | `table.merge(r1, c1, r2, c2)` in Word, `book.merge_cells("A1:C1")` in Excel |
 | `number:number-style` data styles | number format codes: `book.cell_style(number_format="#,##0.00")` |

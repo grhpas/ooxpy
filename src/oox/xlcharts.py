@@ -8,8 +8,8 @@
 The range's first row holds the series names and its first column the
 categories (for scatter: the x values); ``series_in="rows"`` reads series
 along rows instead.  The chart refers to the cells (``Sales!$B$2:$B$5``) and
-caches their current values, so it shows without recalculation.  Size in EMU
-(``oox.units``); the chart covers the cells under it, computed from the
+caches their current values, so it shows without recalculation.  Size in
+points or ``Length`` (``Cm(15)``); the chart covers the cells under it, computed from the
 sheet's column widths and row heights.  Other options are those of
 ``oox.charts.build_chart``.
 """
@@ -20,10 +20,10 @@ import re
 from typing import TYPE_CHECKING
 
 from . import drawing
-from .charts import CHART_URI, RT_CHART, Series, build_chart, chart_info
+from .charts import CHART_URI, RT_CHART, Series, _chart_dict, build_chart, chart_record
 from .element import OoxElement
 from .ns import a, c, x, xdr
-from .units import Cm
+from .units import DRAWING_LIMIT, Cm, emu
 
 if TYPE_CHECKING:
     from .spreadsheet import SpreadsheetDocument
@@ -120,12 +120,13 @@ def series_from_range(book: SpreadsheetDocument, sheet: str, data: str,
 
 
 def add_chart(book: SpreadsheetDocument, sheet: str, kind: str, data: str, *,
-              anchor: str = "E2", width: int = Cm(15), height: int = Cm(7.5),
+              anchor: str = "E2", width: float = Cm(15), height: float = Cm(7.5),
               series_in: str = "columns", name: str | None = None, **options) -> OoxElement:
     """Add a chart of ``data`` with its top-left corner at ``anchor``; returns
     its ``c:chartSpace``."""
     from .spreadsheet import split_ref
 
+    width, height = emu(width, "width", DRAWING_LIMIT), emu(height, "height", DRAWING_LIMIT)
     ws = book._ws(sheet)
     ws_part = book.part_of(ws)
     cats, cref, series = series_from_range(book, sheet, data, series_in)
@@ -187,9 +188,10 @@ def add_chart_sheet(book: SpreadsheetDocument, name: str, kind: str, sheet: str,
     return space
 
 
-def charts(book: SpreadsheetDocument, sheet: str) -> list[dict]:
-    """Charts on a sheet or chart sheet in drawing order: ``chart_info`` plus
-    "anchor" (a worksheet's top-left cell; None on a chart sheet) and "name"."""
+def charts(book: SpreadsheetDocument, sheet: str) -> list:
+    """A ``Chart`` for each chart on a sheet or chart sheet, in drawing order,
+    with its ``anchor`` (a worksheet's top-left cell; None on a chart sheet)
+    and ``name``."""
     from .spreadsheet import cell_ref
 
     ws = book.chart_sheet(sheet) if sheet in book.chart_sheet_names else book._ws(sheet)
@@ -199,13 +201,13 @@ def charts(book: SpreadsheetDocument, sheet: str) -> list[dict]:
             if not isinstance(anchor.tag, str):
                 continue
             ref = anchor.find(".//" + C_CHART)
-            rel = dpart.rels.items.get(ref.get(R_ID, "")) if ref is not None else None
+            rel = dpart.rels.get(ref.get(R_ID, "")) if ref is not None else None
             if rel is None or rel.reltype != RT_CHART:
                 continue
             target = dpart.resolve(rel.target)
             if target not in book.package.parts:
                 continue
-            info = chart_info(book.package.parts[target].element)
+            info = _chart_dict(book.package.parts[target].element)
             _fill_from_cells(book, info)
             frm = anchor.find(XDR + "from")
             if frm is not None:
@@ -215,7 +217,7 @@ def charts(book: SpreadsheetDocument, sheet: str) -> list[dict]:
                 info["anchor"] = None
             pr = anchor.find(".//" + XDR + "cNvPr")
             info["name"] = pr.get("name") if pr is not None else None
-            out.append(info)
+            out.append(chart_record(info))
     return out
 
 

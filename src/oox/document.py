@@ -17,16 +17,45 @@ import os
 import posixpath
 import sys
 from collections.abc import Callable
-from typing import IO, ClassVar
+from typing import IO, TYPE_CHECKING, ClassVar, NamedTuple
 
 from . import drawing, images
 from ._generated.parts import PARTS
 from .element import OoxElement
 from .errors import PackageError
 from .opc import Package, Part
+from .units import DRAWING_LIMIT, Cm, emu
+
+if TYPE_CHECKING:
+    from .fieldcalc import Field
+    from .records import Chart, Comment, ContentControl, Hyperlink, Note, Picture, Protection, Revision, TextBox
 
 RT_OFFICE_DOCUMENT = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"
 RT_IMAGE = PARTS["ImagePart"]["relationship_type"]
+_R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+_IMAGE_REFS = {  # element -> the attributes that may hold its relationship id
+    "{http://schemas.openxmlformats.org/drawingml/2006/main}blip": (f"{{{_R}}}embed",
+                                                                     f"{{{_R}}}link"),
+    "{urn:schemas-microsoft-com:vml}imagedata": (f"{{{_R}}}id", f"{{{_R}}}pict",
+                                                  "{urn:schemas-microsoft-com:office:office}relid"),
+}
+
+
+def picture_size(info: images.ImageInfo, width: float | None,
+                 height: float | None) -> tuple[int, int]:
+    """(cx, cy) in EMU from optional points/``Length``; one missing dimension
+    keeps the aspect ratio, both missing give the natural size."""
+    return info.scaled(None if width is None else emu(width, "width", DRAWING_LIMIT),
+                       None if height is None else emu(height, "height", DRAWING_LIMIT))
+
+
+class ImageData(NamedTuple):
+    """An image's bytes and where they live; see ``OoxDocument.image_of``."""
+
+    data: bytes | None
+    content_type: str | None
+    partname: str | None
+    external: str | None
 
 
 class OoxDocument:
@@ -178,11 +207,37 @@ class OoxDocument:
 
     def part_of(self, element: OoxElement) -> Part:
         """The part whose XML tree contains ``element``."""
-        root = element.getroottree().getroot()
-        for part in self.package.parts.values():
-            if part._element is root:
-                return part
-        raise PackageError("element is not attached to a part of this document")
+        return self.package.part_of(element)
+
+    def _first_related(self, part_type: str) -> Part | None:
+        found = self.related_parts(self.main_part, part_type)
+        return found[0] if found else None
+
+    def image_of(self, element) -> ImageData:
+        """The image an element shows: ``(data, content_type, partname,
+        external)``.  ``element`` is an ``a:blip`` or ``v:imagedata``, anything
+        that holds one (``w:drawing``, ``pic:pic``, ``p:pic``, ``w:pict``), a
+        picture from ``pictures()`` or a picture bullet's ``ListItem.picture``.
+        A linked image has ``data`` None and its address in ``external``."""
+        if isinstance(element, dict):
+            element = element["element"]
+        elif not isinstance(element, OoxElement) and hasattr(element, "element"):
+            element = element.element  # a Picture or Shape record
+        ref = element if element.tag in _IMAGE_REFS else next(
+            (e for e in element.iter(*_IMAGE_REFS)), None)
+        if ref is None:
+            raise ValueError(f"<{element.tag}> holds no image reference")
+        rid = next((ref.get(a) for a in _IMAGE_REFS[ref.tag] if ref.get(a)), None)
+        if rid is None:
+            raise ValueError("the image element has no relationship id")
+        part = self.part_of(ref)
+        rel = part.rels.get(rid)
+        if rel is None:
+            raise PackageError(f"{part.partname} has no relationship {rid}")
+        if rel.external:
+            return ImageData(None, None, None, rel.target)
+        target = part.related_part(rid)
+        return ImageData(target.blob, target.content_type, target.partname, None)
 
     # -- media ----------------------------------------------------------------
     def add_image(self, image, source: Part | None = None) -> tuple[str, images.ImageInfo]:
@@ -369,62 +424,125 @@ class WordprocessingDocument(OoxDocument):
     # odfpy-flavoured alias: doc.text.addElement(...) in odfpy
     text = body
 
+    # Parts a document may lack: the properties read (None when absent), the
+    # ensure_* methods create.  Reading never changes a document.
+    def _main_related(self, part_type: str) -> OoxElement | None:
+        part = self._first_related(part_type)
+        return part.element if part is not None else None
+
+    def _ensure_main_related(self, part_type: str, factory: Callable) -> OoxElement:
+        root = self._main_related(part_type)
+        if root is None:
+            part, _ = self.add_part(part_type, element=factory())
+            root = part.element
+        return root
+
+    # The parts behind the main document, or None when the document has none.
     @property
-    def styles(self) -> OoxElement:
-        """Root ``<w:styles>`` of the styles part, created on first use.
+    def styles_part(self) -> Part | None:
+        """The styles part (``word/styles.xml``), or None."""
+        return self._first_related("StyleDefinitionsPart")
+
+    @property
+    def settings_part(self) -> Part | None:
+        """The document settings part (``word/settings.xml``), or None."""
+        return self._first_related("DocumentSettingsPart")
+
+    @property
+    def numbering_part(self) -> Part | None:
+        """The numbering part (``word/numbering.xml``), or None."""
+        return self._first_related("NumberingDefinitionsPart")
+
+    @property
+    def theme_part(self) -> Part | None:
+        """The theme part (``word/theme/theme1.xml``), or None."""
+        return self._first_related("ThemePart")
+
+    @property
+    def footnotes_part(self) -> Part | None:
+        """The footnotes part, or None."""
+        return self._first_related("FootnotesPart")
+
+    @property
+    def endnotes_part(self) -> Part | None:
+        """The endnotes part, or None."""
+        return self._first_related("EndnotesPart")
+
+    @property
+    def comments_part(self) -> Part | None:
+        """The comments part, or None."""
+        return self._first_related("WordprocessingCommentsPart")
+
+    @property
+    def font_table_part(self) -> Part | None:
+        """The font table part (``word/fontTable.xml``), or None."""
+        return self._first_related("FontTablePart")
+
+    @property
+    def styles(self) -> OoxElement | None:
+        """Root ``<w:styles>`` of the styles part, or None if the document has
+        none (``ensure_styles()`` creates it).
 
         odfpy: ``doc.styles``.  OOXML has no "automatic styles"; direct
         formatting lives in ``w:pPr``/``w:rPr`` instead.
         """
-        found = self.related_parts(self.main_part, "StyleDefinitionsPart")
-        if found:
-            return found[0].element
+        return self._main_related("StyleDefinitionsPart")
+
+    def ensure_styles(self) -> OoxElement:
+        """Root ``<w:styles>``, creating an empty styles part if there is none."""
         from .ns import w
 
-        part, _ = self.add_part("StyleDefinitionsPart", element=w.Styles())
-        return part.element
+        return self._ensure_main_related("StyleDefinitionsPart", w.Styles)
 
-    # -- settings, styles on demand ---------------------------------------------
     @property
-    def settings(self) -> OoxElement:
-        """Root ``<w:settings>``, created on first use."""
-        found = self.related_parts(self.main_part, "DocumentSettingsPart")
-        if found:
-            return found[0].element
+    def settings(self) -> OoxElement | None:
+        """Root ``<w:settings>``, or None (``ensure_settings()`` creates it)."""
+        return self._main_related("DocumentSettingsPart")
+
+    def ensure_settings(self) -> OoxElement:
+        """Root ``<w:settings>``, creating an empty settings part if there is none."""
         from .ns import w
 
-        part, _ = self.add_part("DocumentSettingsPart", element=w.Settings())
-        return part.element
+        return self._ensure_main_related("DocumentSettingsPart", w.Settings)
+
+    def _setting(self, qname: str) -> OoxElement | None:
+        settings = self.settings
+        return settings.first(qname) if settings is not None else None
+
+    def _set_flag(self, qname: str, factory: Callable, value: bool) -> None:
+        el = self._setting(qname)
+        if value and el is None:
+            self.ensure_settings().add(factory())
+        elif not value and el is not None:
+            el.getparent().remove(el)
 
     @property
     def even_and_odd_headers(self) -> bool:
         """Whether even and odd pages have different headers and footers (a document-wide
         setting)."""
-        el = self.settings.first("w:evenAndOddHeaders")
-        return el is not None
+        return self._setting("w:evenAndOddHeaders") is not None
 
     @even_and_odd_headers.setter
     def even_and_odd_headers(self, value: bool) -> None:
         from .ns import w
 
-        el = self.settings.first("w:evenAndOddHeaders")
-        if value and el is None:
-            self.settings.add(w.EvenAndOddHeaders())
-        elif not value and el is not None:
-            self.settings.remove(el)
+        self._set_flag("w:evenAndOddHeaders", w.EvenAndOddHeaders, value)
 
-    def ensure_style(self, style_id: str, text_width: int = 9026) -> str:
+    def ensure_style(self, style_id: str, text_width: float = 451.3) -> str:
         """Make sure a style exists, adding Word's definition for the known
-        feature styles (Header, FootnoteText, TOC1, Hyperlink ...)."""
+        feature styles (Header, FootnoteText, TOC1, Hyperlink ...).
+        ``text_width`` (points) places the right tab of headers, footers and
+        contents lines."""
         try:
             return self.style_id(style_id)
         except KeyError:
+            from .units import PAGE_LIMIT, twips
             from .word_defaults import extra_style
 
-            definition = extra_style(style_id, text_width)
+            definition = extra_style(style_id, twips(text_width, "text_width", PAGE_LIMIT))
             if definition is None:
                 raise
-            self.styles.add(definition)
+            self.ensure_styles().add(definition)
             return style_id
 
     def outline_level(self, paragraph: OoxElement) -> int:
@@ -466,13 +584,14 @@ class WordprocessingDocument(OoxDocument):
         return add_section(self, start, landscape=landscape, page=page)
 
     # -- links, notes, comments -------------------------------------------------
-    def add_hyperlink(self, paragraph: OoxElement, text: str, *, url: str | None = None,
+    def add_hyperlink(self, paragraph: OoxElement, text: str, *, target: str | None = None,
                       anchor: str | None = None, tooltip: str | None = None) -> OoxElement:
-        """A hyperlink with ``text`` at the end of ``paragraph``: to ``url`` (an external
-        relationship) or to the bookmark ``anchor``.  Returns the ``w:hyperlink``."""
+        """A hyperlink with ``text`` at the end of ``paragraph``: to ``target`` (a URL)
+        or to the bookmark ``anchor``.  Returns the ``w:hyperlink``."""
         from .notes import add_hyperlink
 
-        return add_hyperlink(self, paragraph, text, url=url, anchor=anchor, tooltip=tooltip)
+        return add_hyperlink(self, paragraph, text, target=target, anchor=anchor,
+                             tooltip=tooltip)
 
     def add_bookmark(self, name: str, paragraph: OoxElement) -> OoxElement:
         """Bookmark the whole content of ``paragraph`` as ``name`` (the target of
@@ -482,9 +601,9 @@ class WordprocessingDocument(OoxDocument):
 
         return add_bookmark(self, name, paragraph)
 
-    def hyperlinks(self) -> list[tuple[str, str]]:
-        """``(text, target)`` for each hyperlink in the body; the target is the URL or
-        ``#bookmark``."""
+    def hyperlinks(self) -> list[Hyperlink]:
+        """A ``Hyperlink`` for each link in the body: ``target`` the URL, or
+        ``anchor`` the bookmark."""
         from .notes import hyperlinks
 
         return hyperlinks(self)
@@ -509,14 +628,14 @@ class WordprocessingDocument(OoxDocument):
 
         return add_endnote(self, paragraph, text)
 
-    def footnotes(self) -> list[tuple[int, str]]:
-        """``(id, text)`` for each footnote (Word's separator notes excluded)."""
+    def footnotes(self) -> list[Note]:
+        """A ``Note`` (id, text) for each footnote (Word's separator notes excluded)."""
         from .notes import notes
 
         return notes(self, "footnote")
 
-    def endnotes(self) -> list[tuple[int, str]]:
-        """``(id, text)`` for each endnote (Word's separator notes excluded)."""
+    def endnotes(self) -> list[Note]:
+        """A ``Note`` (id, text) for each endnote (Word's separator notes excluded)."""
         from .notes import notes
 
         return notes(self, "endnote")
@@ -529,9 +648,9 @@ class WordprocessingDocument(OoxDocument):
 
         return add_comment(self, paragraph, text, author=author, initials=initials, date=date)
 
-    def comments(self) -> list[dict]:
-        """``{"id", "author", "text", "anchor"}`` for each comment; ``anchor`` is the
-        commented text in the body."""
+    def comments(self) -> list[Comment]:
+        """A ``Comment`` (text, author, date, initials, anchor_text, id) for each
+        comment; ``anchor_text`` is the commented text in the body."""
         from .notes import comments
 
         return comments(self)
@@ -566,9 +685,11 @@ class WordprocessingDocument(OoxDocument):
     # -- formatting, styles --------------------------------------------------
     def add_run(self, paragraph: OoxElement, text: str, *, style: str | None = None,
                 **fmt) -> OoxElement:
-        """Append a run with formatting (bold, italic, underline, strike, size,
-        font, color, highlight, superscript, subscript, caps, small_caps);
-        ``style`` is a character style (name or id)."""
+        """Append a run with formatting (bold, italic, underline, strike,
+        double_strike, size, font, color, highlight, superscript, subscript,
+        caps, small_caps, shading, letter_spacing, hidden, language, border);
+        ``style`` is a character style (name or id).  Units are points; see
+        ``oox.formatting.run``."""
         from .formatting import run
 
         r = run(text, style=self.style_id(style) if style else None, **fmt)
@@ -576,8 +697,9 @@ class WordprocessingDocument(OoxDocument):
         return r
 
     def format_paragraph(self, paragraph: OoxElement, **fmt) -> OoxElement:
-        """Alignment, spacing (pt), indents (EMU or twips), line spacing, keeps;
-        see ``oox.formatting.format_paragraph``."""
+        """Alignment, spacing and indents (points, or a ``Length``), line
+        spacing (a multiple or a ``LineSpacing``), keeps, outline level,
+        shading, borders, tabs; see ``oox.formatting.format_paragraph``."""
         from .formatting import format_paragraph
 
         return format_paragraph(paragraph, **fmt)
@@ -590,12 +712,21 @@ class WordprocessingDocument(OoxDocument):
         return add_style(self, name, kind=kind, base=base, next_style=next_style, quick=quick,
                          **fmt)
 
-    def effective_format(self, paragraph: OoxElement, run: OoxElement | None = None) -> dict:
-        """The formatting Word applies to ``run`` (or the paragraph mark),
-        resolved through defaults, styles and direct formatting."""
-        from .formatting import effective_format
+    def formatting(self):
+        """A ``Formatting`` resolver: ``.paragraph(p)``, ``.run(r)`` and
+        ``.mark(p)`` give the formatting Word shows, through document
+        defaults, table styles, paragraph styles, numbering, character styles
+        and direct formatting.  It indexes the styles once; make another after
+        changing them.  See ``oox.resolve``."""
+        from .resolve import Formatting
 
-        return effective_format(self, paragraph, run)
+        return Formatting(self)
+
+    def effective_format(self, paragraph: OoxElement, run: OoxElement | None = None):
+        """The ``RunFormat`` Word applies to ``run`` (or to the paragraph mark):
+        ``doc.formatting().run(run)`` for a single question."""
+        fmt = self.formatting()
+        return fmt.run(run) if run is not None else fmt.mark(paragraph)
 
     # -- captions, cross-references, field results -----------------------------
     def add_caption(self, text: str, label: str = "Figure", *, before: OoxElement | None = None,
@@ -623,9 +754,9 @@ class WordprocessingDocument(OoxDocument):
 
         return add_field(self, paragraph, instr, result)
 
-    def fields(self, all_stories: bool = False) -> list[dict]:
-        """``{"name", "code", "result"}`` for the body's fields; ``all_stories=True`` adds
-        headers, footers, notes and comments."""
+    def fields(self, all_stories: bool = False) -> list[Field]:
+        """A ``Field`` (name, code, result) for each field in the body;
+        ``all_stories=True`` adds headers, footers, notes and comments."""
         from .fieldcalc import fields
 
         return fields(self, all_stories)
@@ -676,11 +807,11 @@ class WordprocessingDocument(OoxDocument):
 
         return add_checkbox(self, paragraph, tag=tag, checked=checked, title=title)
 
-    def content_controls(self) -> list[dict]:
-        """Every content control (body, headers, footers, notes) in order: ``{"tag", "title",
-        "type", "value", "placeholder", ...}``.  ``value`` is the text (None while the
-        placeholder shows), a bool for check boxes; drop-downs add ``items``, dates add
-        ``date``."""
+    def content_controls(self) -> list[ContentControl]:
+        """A ``ContentControl`` (tag, title, type, value, placeholder ...) for every
+        content control (body, headers, footers, notes), in order.  ``value`` is the
+        text (None while the placeholder shows), a bool for check boxes; drop-downs
+        have ``items``, dates a ``date``."""
         from .controls import content_controls
 
         return content_controls(self)
@@ -698,7 +829,7 @@ class WordprocessingDocument(OoxDocument):
 
             ensure_paragraph_after_table(self)
 
-    def add_table(self, rows: list[list], *, widths: list[int] | None = None,
+    def add_table(self, rows: list[list], *, widths: list[float] | None = None,
                   style: str | None = "Table Grid", header_rows: int = 0,
                   bold_header: bool = True, align: str | None = None,
                   before: OoxElement | None = None):
@@ -722,8 +853,9 @@ class WordprocessingDocument(OoxDocument):
 
         return add_floating_picture(self, image, **options)
 
-    def pictures(self) -> list[dict]:
-        """Inline and floating pictures in the body, in order."""
+    def pictures(self) -> list[Picture]:
+        """A ``Picture`` for each inline and floating picture in the body, in order
+        (sizes in points); ``image_of(picture)`` gives its bytes."""
         from .floating import pictures
 
         return pictures(self)
@@ -736,8 +868,9 @@ class WordprocessingDocument(OoxDocument):
 
         return add_text_box(self, content, **options)
 
-    def text_boxes(self) -> list[dict]:
-        """Text boxes in the body, each once (``oox.textboxes``)."""
+    def text_boxes(self) -> list[TextBox]:
+        """A ``TextBox`` (text, paragraphs, vml_only) for each text box in the body,
+        each once."""
         from .textboxes import text_boxes
 
         return text_boxes(self)
@@ -758,9 +891,9 @@ class WordprocessingDocument(OoxDocument):
 
         protect(self, edit, password=password, **options)
 
-    def protection(self) -> dict | None:
-        """The editing restriction: ``{"edit", "enforced", "password", "algorithm",
-        "formatting"}``, or None."""
+    def protection(self) -> Protection | None:
+        """The editing restriction as a ``Protection`` (edit, enforced, password,
+        algorithm, formatting), or None."""
         from .protection import protection
 
         return protection(self)
@@ -783,17 +916,13 @@ class WordprocessingDocument(OoxDocument):
     @property
     def track_changes(self) -> bool:
         """Word's "Track Changes" switch (``w:trackRevisions`` in settings)."""
-        return self.settings.first("w:trackRevisions") is not None
+        return self._setting("w:trackRevisions") is not None
 
     @track_changes.setter
     def track_changes(self, value: bool) -> None:
         from .ns import w
 
-        el = self.settings.first("w:trackRevisions")
-        if value and el is None:
-            self.settings.add(w.TrackRevisions())
-        elif not value and el is not None:
-            self.settings.remove(el)
+        self._set_flag("w:trackRevisions", w.TrackRevisions, value)
 
     def suggest_insert(self, paragraph: OoxElement, text: str, *, author: str, date=None,
                        after: str | None = None) -> OoxElement:
@@ -821,10 +950,11 @@ class WordprocessingDocument(OoxDocument):
         return suggest_replace(self, paragraph, old, new, author=author, date=date,
                                occurrence=occurrence)
 
-    def revisions(self) -> list[dict]:
-        """Tracked changes in document order (body first, then other stories): ``{"kind",
-        "author", "date", "text"}``; ``kind`` is insert, delete, move-from, move-to,
-        paragraph-insert, paragraph-delete, row-insert, row-delete or format."""
+    def revisions(self) -> list[Revision]:
+        """A ``Revision`` (kind, author, date, text) for each tracked change, in
+        document order (body first, then other stories); ``kind`` is insert, delete,
+        move-from, move-to, paragraph-insert, paragraph-delete, row-insert,
+        row-delete or format."""
         from .revisions import revisions
 
         return revisions(self)
@@ -843,15 +973,16 @@ class WordprocessingDocument(OoxDocument):
 
     # -- lists ------------------------------------------------------------------
     @property
-    def numbering(self) -> OoxElement:
-        """Root ``<w:numbering>`` of the numbering part, created on first use."""
-        found = self.related_parts(self.main_part, "NumberingDefinitionsPart")
-        if found:
-            return found[0].element
+    def numbering(self) -> OoxElement | None:
+        """Root ``<w:numbering>`` of the numbering part, or None
+        (``ensure_numbering()`` creates it)."""
+        return self._main_related("NumberingDefinitionsPart")
+
+    def ensure_numbering(self) -> OoxElement:
+        """Root ``<w:numbering>``, creating an empty numbering part if there is none."""
         from .ns import w
 
-        part, _ = self.add_part("NumberingDefinitionsPart", element=w.Numbering())
-        return part.element
+        return self._ensure_main_related("NumberingDefinitionsPart", w.Numbering)
 
     def new_list(self, kind: str = "bullet", start: int = 1):
         """A new list: "bullet", "decimal" (1. a. i.) or "legal" (1. 1.1. 1.1.1.).
@@ -860,11 +991,13 @@ class WordprocessingDocument(OoxDocument):
 
         return new_list(self, kind, start)
 
-    def list_labels(self) -> list[tuple[OoxElement, str]]:
-        """``(paragraph, label)`` for every list paragraph, as Word numbers them."""
+    def list_labels(self, *, all_stories: bool = False):
+        """A ``ListItem`` (paragraph, label, level, num_id, format, font ...) for
+        every list paragraph, numbered as Word numbers them.  ``all_stories``
+        adds headers, footers, footnotes, endnotes and comments."""
         from .numbering import list_labels
 
-        return list_labels(self)
+        return list_labels(self, all_stories=all_stories)
 
     # -- styles and paragraphs --------------------------------------------------
     def style_id(self, style: str) -> str:
@@ -913,20 +1046,20 @@ class WordprocessingDocument(OoxDocument):
         self.body.add(p)
         return p
 
-    def add_picture(self, image, *, width: int | None = None, height: int | None = None,
+    def add_picture(self, image, *, width: float | None = None, height: float | None = None,
                     paragraph: OoxElement | None = None, descr: str = "",
                     fallback=None) -> OoxElement:
         """Insert an inline picture; returns the ``w:r`` holding it.
 
-        Size is in EMU (``oox.units``); give one dimension to keep the aspect
-        ratio, none for the image's natural size.  Without ``paragraph`` the
+        Size in points (or a ``Length``: ``Cm(4)``); give one dimension to keep
+        the aspect ratio, none for the image's natural size.  Without ``paragraph`` the
         picture goes into a new paragraph at the end of the body.  An SVG
         needs ``fallback=`` (a PNG) for Office before 2016.
         """
         from .ns import a, pic, w, wp
 
         rid, info, svg_rid = self.add_picture_image(image, fallback)
-        cx, cy = info.scaled(width, height)
+        cx, cy = picture_size(info, width, height)
         n = drawing.max_shape_id(self.document) + 1
         name = f"Picture {n}"
         inline = wp.Inline(
@@ -947,14 +1080,14 @@ class WordprocessingDocument(OoxDocument):
         return run
 
 
-    def add_chart(self, kind: str, categories, series, *, width: int = 5400000,
-                  height: int = 2700000, paragraph: OoxElement | None = None,
+    def add_chart(self, kind: str, categories, series, *, width: float = Cm(15),
+                  height: float = Cm(7.5), paragraph: OoxElement | None = None,
                   descr: str = "", **options) -> OoxElement:
         """Insert an inline chart; returns the ``w:r`` holding it.
 
         ``series`` is ``{"North": [1, 2, 3], ...}`` (or ``oox.charts.Series``
         objects); the data is also stored in an embedded workbook, so Word's
-        "Edit Data" works.  Size in EMU (default 15 x 7.5 cm).  Options are
+        "Edit Data" works.  Size in points or ``Length`` (default 15 x 7.5 cm).  Options are
         those of ``oox.charts.build_chart`` (title, legend, labels, ...).
         """
         from .charts import CHART_URI, add_embedded_chart
@@ -964,7 +1097,7 @@ class WordprocessingDocument(OoxDocument):
                                     **options)
         n = drawing.max_shape_id(self.document) + 1
         inline = wp.Inline(
-            wp.Extent(cx=width, cy=height),
+            wp.Extent(cx=emu(width, "width", DRAWING_LIMIT), cy=emu(height, "height", DRAWING_LIMIT)),
             wp.EffectExtent(l=0, t=0, r=0, b=0),
             wp.DocPr(id=n, name=f"Chart {n}", descr=descr or None),
             wp.CNvGraphicFramePr(),
@@ -978,8 +1111,8 @@ class WordprocessingDocument(OoxDocument):
             paragraph.add(run)
         return run
 
-    def charts(self) -> list[dict]:
-        """Charts in the body, in order: ``oox.charts.chart_info`` plus "rid"."""
+    def charts(self) -> list[Chart]:
+        """A ``Chart`` (``oox.records``) for each chart in the body, in order."""
         from .charts import charts_in
 
         return charts_in(self, self.main_part, self.document)

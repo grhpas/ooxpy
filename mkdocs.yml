@@ -1,7 +1,7 @@
 site_name: ooxpy
 site_description: Office Open XML (docx, xlsx, pptx) for Python, the odfpy way
-site_url: https://grhpas.github.io/ooxpy/
 repo_url: https://github.com/grhpas/ooxpy
+edit_uri: edit/main/docs/
 docs_dir: docs
 strict: true
 
@@ -57,6 +57,7 @@ nav:
       - PowerPoint: guide/powerpoint.md
       - Charts: guide/charts.md
       - Existing files: guide/existing-files.md
+      - Reading as Word shows it: guide/reading.md
       - Validation and Office versions: guide/validation.md
   - Cookbook: cookbook.md
   - Command line: cli.md
@@ -72,9 +73,11 @@ nav:
       - Charts: reference/charts.md
       - Elements: reference/elements.md
       - Package and properties: reference/package.md
+      - Records: reference/records.md
       - Units and errors: reference/utilities.md
   - Project:
       - API stability: STABILITY.md
+      - API decisions before 1.0: API_DECISIONS.md
       - Changelog: changelog.md
       - Architecture: ARCHITECTURE.md
       - odfpy compatibility details: ODFPY_COMPAT.md

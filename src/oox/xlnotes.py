@@ -152,8 +152,10 @@ def add_comment(book: SpreadsheetDocument, sheet: str, ref: str, text: str, *,
     return comment
 
 
-def comments(book: SpreadsheetDocument, sheet: str) -> dict[str, tuple[str, str]]:
-    """``{ref: (author, text)}``; the "Author:" line Excel puts first is removed."""
+def comments(book: SpreadsheetDocument, sheet: str) -> dict:
+    """``{ref: Comment}``; the "Author:" line Excel puts first is removed."""
+    from .records import Comment
+
     cpart = _comments_part(book, book.sheet(sheet), create=False)
     if cpart is None:
         return {}
@@ -167,7 +169,7 @@ def comments(book: SpreadsheetDocument, sheet: str) -> dict[str, tuple[str, str]
         text = _text(c)
         if author and text.startswith(author + ":"):
             text = text[len(author) + 1:].lstrip("\n")
-        out[c.get("ref")] = (author, text)
+        out[c.get("ref")] = Comment(text, author=author or None, cell=c.get("ref"))
     return out
 
 
@@ -205,17 +207,28 @@ def add_hyperlink(book: SpreadsheetDocument, sheet: str, ref: str, target: str, 
     return link
 
 
-def hyperlinks(book: SpreadsheetDocument, sheet: str) -> dict[str, str]:
+def hyperlinks(book: SpreadsheetDocument, sheet: str) -> dict:
+    """``{ref: Hyperlink}``: ``target`` a URL, or ``#Sheet!A1`` for a link
+    inside the workbook (kind "location"), as ``add_hyperlink`` takes it."""
+    from .records import Hyperlink
+
     ws = book.sheet(sheet)
     part = book.part_of(ws)
     links = ws.first("x:hyperlinks")
-    out: dict[str, str] = {}
+    out: dict = {}
     for link in (links.iterchildren(f"{{{X}}}hyperlink") if links is not None else []):
-        rid = link.get(f"{{{R}}}id")
+        rid, ref = link.get(f"{{{R}}}id"), link.get("ref")
+        text = link.get("display")
+        if text is None:
+            value = book.value(sheet, ref) if ref and ":" not in ref else None
+            text = None if value is None else str(value)
+        tip = link.get("tooltip")
         if rid:
-            rel = part.rels.items.get(rid)
-            out[link.get("ref")] = rel.target if rel is not None else ""
+            rel = part.rels.get(rid)
+            out[ref] = Hyperlink(text, target=rel.target if rel is not None else None,
+                                 tooltip=tip, cell=ref)
         else:
-            out[link.get("ref")] = "#" + (link.get("location") or "")
+            out[ref] = Hyperlink(text, target="#" + (link.get("location") or ""), tooltip=tip,
+                                 kind="location", cell=ref)
     return out
 

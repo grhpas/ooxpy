@@ -31,21 +31,21 @@ for row in [("North", 120, 135, 150), ("South", 95, 110, 99), ("West", 80, 84.5,
 book.add_chart("Sales", "column", "A1:D4", anchor="F2", title="Quarterly sales",
                y_title="EUR k", legend="bottom")
 info = book.charts("Sales")[0]
-print(info["type"], info["anchor"], [s["name"] for s in info["series"]])
-print(info["series"][0]["values_ref"], info["series"][0]["values"])</code></pre>
+print(info.kind, info.anchor, [s.name for s in info.series])
+print(info.series[0].values_ref, info.series[0].values)</code></pre>
 <pre class="out">column F2 ['Q1', 'Q2', 'Q3']
 Sales!$B$2:$B$4 [120, 95, 80]</pre>
 <p>The range's first row names the series and its first column holds the categories.
 The chart refers to the cells, so it follows later edits in Excel, and it also stores
 their current values, so every viewer draws it straight away. The default size is
-15 × 7.5 cm (<code>width=</code>, <code>height=</code> in EMU, see <code>oox.units</code>).</p>
+15 × 7.5 cm (<code>width=</code>, <code>height=</code> in points, or <code>Cm(15)</code> from <code>oox.units</code>).</p>
 
 <h2>Kinds, groupings and options</h2>
 <pre><code class="run">book.add_chart("Sales", "pie", "A1:B4", anchor="F18", title="Q1 share", labels="percent")
 book.add_chart("Sales", "line", "A1:D4", anchor="N2", series_in="rows", markers=False)
 book.add_chart("Sales", "bar", "A1:D4", anchor="N18", grouping="stacked",
                colors=["2F5496", "ED7D31", "A5A5A5"])
-print([c["type"] for c in book.charts("Sales")])
+print([c.kind for c in book.charts("Sales")])
 book.save("charts.xlsx")</code></pre>
 <pre class="out">['column', 'pie', 'line', 'bar_stacked']</pre>
 <table>
@@ -70,19 +70,19 @@ doc = WordprocessingDocument.new()
 doc.add_chart("column", ["Q1", "Q2", "Q3"], {"North": [120, 135, 150], "South": [95, 110, 99]},
               title="Sales", labels="value")
 doc.save("charts.docx")
-print(doc.charts()[0]["series"][1]["values_ref"])</code></pre>
+print(doc.charts()[0].series[1].values_ref)</code></pre>
 <pre class="out">Sheet1!$C$2:$C$4</pre>
 <pre><code class="run">from oox import PresentationDocument
 from oox.units import Inches
 
 deck = PresentationDocument.new()
 slide = deck.add_slide("Blank")
-deck.add_chart(slide, "doughnut", ["Web", "Shop", "Phone"], {"Channel": [55, 30, 15]},
-               Inches(1), Inches(1), Inches(5), Inches(5), labels="percent")
-deck.add_chart(slide, "scatter", [1, 2, 3, 4], {"Measured": [2.1, 3.9, 6.2, 7.8]},
-               Inches(6.5), Inches(1), Inches(5), Inches(5), lines=True, legend=None)
+deck.add_chart(slide, "doughnut", ["Web", "Shop", "Phone"], {"Channel": [55, 30, 15]}, x=Inches(1),
+               y=Inches(1), width=Inches(5), height=Inches(5), labels="percent")
+deck.add_chart(slide, "scatter", [1, 2, 3, 4], {"Measured": [2.1, 3.9, 6.2, 7.8]}, x=Inches(6.5),
+               y=Inches(1), width=Inches(5), height=Inches(5), lines=True, legend=None)
 deck.save("charts.pptx")
-print([c["type"] for c in deck.charts(slide)])</code></pre>
+print([c.kind for c in deck.charts(slide)])</code></pre>
 <pre class="out">['doughnut', 'scatter_lines']</pre>
 <p>Here the data comes from Python: categories plus <code>{name: values}</code>. oox also
 stores it in a small workbook inside the file, which the chart refers to, so
@@ -93,7 +93,7 @@ stores it in a small workbook inside the file, which the chart refers to, so
 
 again = open_document("charts.xlsx")
 for chart in again.charts("Sales"):
-    print(chart["anchor"], chart["type"], chart["title"])</code></pre>
+    print(chart.anchor, chart.kind, chart.title)</code></pre>
 <pre class="out">F2 column Quarterly sales
 F18 pie Q1 share
 N2 line None
@@ -112,7 +112,7 @@ for row in [["Jan", 120, 2.5], ["Feb", 150, 2.25], ["Mar", 90, 2.75]]:
 book.add_chart("Prices", "column", "A1:C4", kinds={"Price": "line"}, secondary=["Price"],
                y_title="Units", y2_title="EUR", y2_number_format="0.00")
 chart = book.charts("Prices")[0]
-print([(s["name"], s["type"], s["axis"]) for s in chart["series"]], chart["y2_title"])</code></pre>
+print([(s.name, s.kind, s.axis) for s in chart.series], chart.y2_title)</code></pre>
 <pre class="out">[('Units', 'column', 'primary'), ('Price', 'line_markers', 'secondary')] EUR</pre>
 <p><code>kinds=</code> gives series (by name, or 0-based position) another kind than the
 chart's; columns, lines and areas combine, bars only with bars. <code>secondary=</code> puts

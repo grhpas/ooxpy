@@ -4,50 +4,86 @@ Length units and the exception hierarchy.
 
 ## `oox.units`
 
-Length units.  DrawingML measures in EMU (English Metric Units):
-914400 per inch, 360000 per cm, 12700 per point.  WordprocessingML page
-geometry uses twips (1/20 pt).  All helpers return `int`.
+Length units.
+
+**oox's rule: a plain number is points, as in Office's dialogs; anything else
+is a `Length`.**  Every size, position, margin, width and indent oox takes
+follows it, and every reader reports lengths in points::
 
 ```python
-from oox.units import Inches, Cm, Pt
-doc.add_picture("logo.png", width=Cm(4))
+from oox.units import Cm, Inches, Pt, Emu
+doc.add_picture("logo.png", width=Cm(4))     # or width=113.4 (points)
+section.set_margins(left=Inches(1))          # or left=72
+deck.add_shape(slide, "rect", x=Emu(914400)) # EMU from another library
 ```
+
+The helpers return a `Length`: an `int` count of EMU (DrawingML's unit:
+914400 per inch, 12700 per point) that remembers it is a length.  Excel column
+widths are the exception: they are in characters, as in Excel's dialog.
+
+A plain number too large to be meant as points (a raw EMU or twips value from
+older code) raises `ValueError` naming `Emu()`, instead of drawing a
+picture a few hundred metres wide.
 
 ### `Cm`
 
 ```python
-Cm(value: float) -> int
+Cm(value: float) -> Length
 ```
 
 ### `Emu`
 
 ```python
-Emu(value: float) -> int
+Emu(value: float) -> Length
 ```
 
 ### `Inches`
 
 ```python
-Inches(value: float) -> int
+Inches(value: float) -> Length
 ```
+
+### `Length`
+
+*class*
+
+A length in EMU.  Behaves as an `int` everywhere; arithmetic gives
+plain ints.
 
 ### `Mm`
 
 ```python
-Mm(value: float) -> int
+Mm(value: float) -> Length
 ```
 
 ### `Pt`
 
 ```python
-Pt(value: float) -> int
+Pt(value: float) -> Length
 ```
 
 ### `Px`
 
 ```python
-Px(value: float, dpi: float = 96) -> int
+Px(value: float, dpi: float = 96) -> Length
 ```
+
+### `emu`
+
+```python
+emu(value: float, name: str = 'length', limit: float | None = None) -> int
+```
+
+Points (or a `Length`) -> EMU.  `limit` (points) catches raw EMU or
+twips passed by mistake.
+
+### `points`
+
+```python
+points(emu_value: float) -> float
+```
+
+EMU -> points, as the readers report them (exact enough to write back).
 
 ### `to_twips`
 
@@ -56,6 +92,22 @@ to_twips(emu: int) -> int
 ```
 
 EMU -> twips (for w:pgSz, w:pgMar, w:tblW ...).
+
+### `twips`
+
+```python
+twips(value: float, name: str = 'length', limit: float | None = None) -> int
+```
+
+Points (or a `Length`) -> twips.
+
+### `twips_to_points`
+
+```python
+twips_to_points(value: float) -> float
+```
+
+Twips -> points.
 
 ## `oox.errors`
 

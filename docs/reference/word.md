@@ -63,16 +63,83 @@ The root `w:document` element of the main part.
 
 *read-only property*
 
-Root `<w:settings>`, created on first use.
+Root `<w:settings>`, or None (`ensure_settings()` creates it).
 
 #### `styles`
 
 *read-only property*
 
-Root `<w:styles>` of the styles part, created on first use.
+Root `<w:styles>` of the styles part, or None if the document has
+none (`ensure_styles()` creates it).
 
 odfpy: `doc.styles`.  OOXML has no "automatic styles"; direct
 formatting lives in `w:pPr`/`w:rPr` instead.
+
+#### `ensure_settings`
+
+```python
+ensure_settings() -> OoxElement
+```
+
+Root `<w:settings>`, creating an empty settings part if there is none.
+
+#### `ensure_styles`
+
+```python
+ensure_styles() -> OoxElement
+```
+
+Root `<w:styles>`, creating an empty styles part if there is none.
+
+### Parts
+
+#### `styles_part`
+
+*read-only property*
+
+The styles part (`word/styles.xml`), or None.
+
+#### `settings_part`
+
+*read-only property*
+
+The document settings part (`word/settings.xml`), or None.
+
+#### `numbering_part`
+
+*read-only property*
+
+The numbering part (`word/numbering.xml`), or None.
+
+#### `theme_part`
+
+*read-only property*
+
+The theme part (`word/theme/theme1.xml`), or None.
+
+#### `footnotes_part`
+
+*read-only property*
+
+The footnotes part, or None.
+
+#### `endnotes_part`
+
+*read-only property*
+
+The endnotes part, or None.
+
+#### `comments_part`
+
+*read-only property*
+
+The comments part, or None.
+
+#### `font_table_part`
+
+*read-only property*
+
+The font table part (`word/fontTable.xml`), or None.
 
 ### Text and styles
 
@@ -105,9 +172,37 @@ add_run(
 ) -> OoxElement
 ```
 
-Append a run with formatting (bold, italic, underline, strike, size,
-font, color, highlight, superscript, subscript, caps, small_caps);
-`style` is a character style (name or id).
+Append a run with formatting (bold, italic, underline, strike,
+double_strike, size, font, color, highlight, superscript, subscript,
+caps, small_caps, shading, letter_spacing, hidden, language, border);
+`style` is a character style (name or id).  Units are points; see
+`oox.formatting.run`.
+
+**Details** (from `oox.formatting`)
+
+Character and paragraph formatting, custom styles, and the value types
+shared with the formatting resolver (`oox.resolve`).
+
+```python
+p = doc.add_paragraph()
+doc.add_run(p, "Warning: ", bold=True, color="C00000")
+doc.add_run(p, "check the figures.", italic=True, size=12, font="Georgia")
+doc.format_paragraph(p, align="center", space_after=12, first_line=Cm(1),
+                     line_spacing=LineSpacing.exactly(14))
+
+doc.add_style("Note", base="Normal", italic=True, color="595959", space_before=6)
+doc.add_paragraph("A note.", style="Note")
+
+fmt = doc.formatting()           # reads what Word shows; see oox.resolve
+fmt.paragraph(p).line_spacing    # LineSpacing(rule='exact', value=14.0)
+fmt.run(r).bold
+```
+
+Units are points throughout, as in Word's UI: font size, paragraph spacing,
+indents, letter spacing, tab positions, border widths.  A `Length` from
+`oox.units` (`Cm(1)`, `Inches(0.5)`) is accepted wherever points are.
+Line spacing is a multiple (`1.15`) or a `LineSpacing`.  The resolver
+reports values in the same forms the writers take.
 
 #### `format_paragraph`
 
@@ -115,13 +210,17 @@ font, color, highlight, superscript, subscript, caps, small_caps);
 format_paragraph(paragraph: OoxElement, **fmt) -> OoxElement
 ```
 
-Alignment, spacing (pt), indents (EMU or twips), line spacing, keeps;
-see `oox.formatting.format_paragraph`.
+Alignment, spacing and indents (points, or a `Length`), line
+spacing (a multiple or a `LineSpacing`), keeps, outline level,
+shading, borders, tabs; see `oox.formatting.format_paragraph`.
 
 Paragraph formatting: align (left/center/right/justify), space_before /
-space_after (pt), line_spacing (multiple or "12pt"), indent_left /
-indent_right / first_line (EMU or twips; negative first_line = hanging),
-keep_with_next, keep_together, page_break_before.
+space_after (pt), line_spacing (a multiple or a `LineSpacing`),
+indent_left / indent_right / first_line (pt or a `Length`; negative
+first_line = hanging), keep_with_next, keep_together, page_break_before,
+widow_control, contextual_spacing, outline_level (0-8), shading (hex
+fill), borders (`Borders` or {"bottom": Border(), ...}), tabs (`Tab`
+stops; replaces the paragraph's own).
 
 #### `add_style`
 
@@ -140,7 +239,8 @@ add_style(
 A custom paragraph or character style; returns its id.
 
 Add a custom style and return its id.  `fmt` takes the run and
-paragraph options (paragraph styles may use both).
+paragraph options (paragraph styles may use both; `shading` on a
+paragraph style shades the paragraph).
 
 #### `style_id`
 
@@ -154,20 +254,84 @@ Style id for a style given by id ("Heading1") or name ("Heading 1",
 #### `ensure_style`
 
 ```python
-ensure_style(style_id: str, text_width: int = 9026) -> str
+ensure_style(style_id: str, text_width: float = 451.3) -> str
 ```
 
 Make sure a style exists, adding Word's definition for the known
 feature styles (Header, FootnoteText, TOC1, Hyperlink ...).
+`text_width` (points) places the right tab of headers, footers and
+contents lines.
+
+#### `formatting`
+
+```python
+formatting()
+```
+
+A `Formatting` resolver: `.paragraph(p)`, `.run(r)` and
+`.mark(p)` give the formatting Word shows, through document
+defaults, table styles, paragraph styles, numbering, character styles
+and direct formatting.  It indexes the styles once; make another after
+changing them.  See `oox.resolve`.
+
+**Details** (from `oox.resolve`)
+
+What Word shows: the effective formatting of paragraphs and runs.
+
+```python
+fmt = doc.formatting()
+pf = fmt.paragraph(p)     # ParagraphFormat(style='Heading 1', align='left', ...)
+rf = fmt.run(r)           # RunFormat(bold=True, size=16.0, font='Calibri Light', ...)
+fmt.mark(p)               # the paragraph mark's RunFormat
+```
+
+Values are in points and in the forms the writers take (`LineSpacing`,
+`Border`, `Tab`), so a value read here can be written back as it is.
+
+Word builds formatting in layers, each overriding the one before (Word's
+"style hierarchy", ECMA-376 Part 1 §17.7.2):
+
+1. document defaults (`w:docDefaults`);
+2. the table style, for paragraphs in a table: its whole-table formatting,
+   then the conditional formats that apply to the cell (banded columns,
+   banded rows, first/last row, first/last column, corner cells, in that
+   order) as switched on by the table's `w:tblLook`;
+3. the paragraph style and the styles it is based on;
+4. numbering: the list level's paragraph properties (indents, tabs).  When
+   the numbering comes from the paragraph style it is applied *before* the
+   style, so the style's own indents win (§17.9.x, and what Word does);
+5. the character style, for runs;
+6. direct formatting.
+
+Toggle properties (bold, italic, caps, small caps, strike, double strike,
+hidden): within a style's `basedOn` chain the nearest value wins; a table or
+character style that turns one on flips the value below it (bold in a
+character style applied to bold text gives regular text, as in Word); a
+paragraph style sets the value outright (MS-OI29500 2.1.258: Word resets
+rather than toggles there); direct formatting sets it outright.
+
+Word's compatibility rule for tables (MS-DOCX `overrideTableStyleFontSize
+AndJustification`, off unless the setting says otherwise): when the
+paragraph style's font size comes from the default paragraph style and is 11
+or 12 pt, or its alignment comes from there and is left, the table style's
+value is kept.
+
+Not modelled: complex-script variants (`w:bCs`, `w:szCs`), character-unit
+indents and `beforeLines`/`afterLines` spacing, East Asian layout,
+frames, conditional formatting recorded only in `w:cnfStyle`.
+
+A resolver indexes the styles when it is made and does not see later edits
+to them; make another one after changing styles.  Reading never changes the
+document.
 
 #### `effective_format`
 
 ```python
-effective_format(paragraph: OoxElement, run: OoxElement | None = None) -> dict
+effective_format(paragraph: OoxElement, run: OoxElement | None = None)
 ```
 
-The formatting Word applies to `run` (or the paragraph mark),
-resolved through defaults, styles and direct formatting.
+The `RunFormat` Word applies to `run` (or to the paragraph mark):
+`doc.formatting().run(run)` for a single question.
 
 #### `outline_level`
 
@@ -199,16 +363,27 @@ Returns a `ListHandle`; `handle.add(text, level)` appends items.
 #### `list_labels`
 
 ```python
-list_labels() -> list[tuple[OoxElement, str]]
+list_labels(*, all_stories: bool = False)
 ```
 
-`(paragraph, label)` for every list paragraph, as Word numbers them.
+A `ListItem` (paragraph, label, level, num_id, format, font ...) for
+every list paragraph, numbered as Word numbers them.  `all_stories`
+adds headers, footers, footnotes, endnotes and comments.
 
 #### `numbering`
 
 *read-only property*
 
-Root `<w:numbering>` of the numbering part, created on first use.
+Root `<w:numbering>` of the numbering part, or None
+(`ensure_numbering()` creates it).
+
+#### `ensure_numbering`
+
+```python
+ensure_numbering() -> OoxElement
+```
+
+Root `<w:numbering>`, creating an empty numbering part if there is none.
 
 ### Sections, headers and footers
 
@@ -247,23 +422,23 @@ add_hyperlink(
     paragraph: OoxElement,
     text: str,
     *,
-    url: str | None = None,
+    target: str | None = None,
     anchor: str | None = None,
     tooltip: str | None = None,
 ) -> OoxElement
 ```
 
-A hyperlink with `text` at the end of `paragraph`: to `url` (an external
-relationship) or to the bookmark `anchor`.  Returns the `w:hyperlink`.
+A hyperlink with `text` at the end of `paragraph`: to `target` (a URL)
+or to the bookmark `anchor`.  Returns the `w:hyperlink`.
 
 #### `hyperlinks`
 
 ```python
-hyperlinks() -> list[tuple[str, str]]
+hyperlinks() -> list[Hyperlink]
 ```
 
-`(text, target)` for each hyperlink in the body; the target is the URL or
-`#bookmark`.
+A `Hyperlink` for each link in the body: `target` the URL, or
+`anchor` the bookmark.
 
 #### `add_bookmark`
 
@@ -295,10 +470,10 @@ part is created on first use.  Returns the reference run.
 #### `footnotes`
 
 ```python
-footnotes() -> list[tuple[int, str]]
+footnotes() -> list[Note]
 ```
 
-`(id, text)` for each footnote (Word's separator notes excluded).
+A `Note` (id, text) for each footnote (Word's separator notes excluded).
 
 #### `add_endnote`
 
@@ -312,10 +487,10 @@ part is created on first use.  Returns the reference run.
 #### `endnotes`
 
 ```python
-endnotes() -> list[tuple[int, str]]
+endnotes() -> list[Note]
 ```
 
-`(id, text)` for each endnote (Word's separator notes excluded).
+A `Note` (id, text) for each endnote (Word's separator notes excluded).
 
 #### `add_comment`
 
@@ -336,11 +511,11 @@ the comment's `w:comment`.
 #### `comments`
 
 ```python
-comments() -> list[dict]
+comments() -> list[Comment]
 ```
 
-`{"id", "author", "text", "anchor"}` for each comment; `anchor` is the
-commented text in the body.
+A `Comment` (text, author, date, initials, anchor_text, id) for each
+comment; `anchor_text` is the commented text in the body.
 
 ### Tables
 
@@ -350,7 +525,7 @@ commented text in the body.
 add_table(
     rows: list[list],
     *,
-    widths: list[int] | None = None,
+    widths: list[float] | None = None,
     style: str | None = 'Table Grid',
     header_rows: int = 0,
     bold_header: bool = True,
@@ -381,8 +556,7 @@ return the merged cell.
 How OOXML stores merges: a horizontal merge is one `w:tc` with
 `w:gridSpan`; a vertical merge keeps a `w:tc` in every row, the first with
 `w:vMerge val="restart"` and the ones below with `w:vMerge` (continue).
-Widths are in twips (1/1440 inch); EMU values from `oox.units` are
-converted when they are obviously EMU (> 100000).
+Widths and heights are in points, or a `Length` from `oox.units`.
 
 Word doesn't count a row whose cells all continue vertical merges (Word 2007
 reports 3 rows for such a 4-row table, and the row takes no height); LibreOffice
@@ -405,8 +579,8 @@ tables()
 add_picture(
     image,
     *,
-    width: int | None = None,
-    height: int | None = None,
+    width: float | None = None,
+    height: float | None = None,
     paragraph: OoxElement | None = None,
     descr: str = '',
     fallback=None,
@@ -415,8 +589,8 @@ add_picture(
 
 Insert an inline picture; returns the `w:r` holding it.
 
-Size is in EMU (`oox.units`); give one dimension to keep the aspect
-ratio, none for the image's natural size.  Without `paragraph` the
+Size in points (or a `Length`: `Cm(4)`); give one dimension to keep
+the aspect ratio, none for the image's natural size.  Without `paragraph` the
 picture goes into a new paragraph at the end of the body.  An SVG
 needs `fallback=` (a PNG) for Office before 2016.
 
@@ -432,10 +606,10 @@ A picture positioned on the page with text wrapping; see
 **Options** (keywords)
 
 ```python
-width: int | None = None
-height: int | None = None
-x: int = 0
-y: int = 0
+width: float | None = None
+height: float | None = None
+x: float = 0
+y: float = 0
 h_relative: str = 'column'
 v_relative: str = 'paragraph'
 h_align: str | None = None
@@ -444,24 +618,26 @@ wrap: str = 'square'
 side: str = 'bothSides'
 paragraph: OoxElement | None = None
 descr: str = ''
-margin: int = 114300
+margin: float = 9
 fallback: Any = None
 ```
 
 Insert a floating picture; returns the `w:r` holding it.
 
-`x`/`y` are offsets in EMU from the `h_relative`/`v_relative`
-reference; `h_align` (left, center, right, inside, outside) and
-`v_align` (top, center, bottom, inside, outside) replace them.
-`margin` is the gap between picture and text on the left and right.
+Sizes and offsets in points (or `Length`).  `x`/`y` are offsets
+from the `h_relative`/`v_relative` reference; `h_align` (left,
+center, right, inside, outside) and `v_align` (top, center, bottom,
+inside, outside) replace them.  `margin` is the gap between picture and
+text on the left and right.
 
 #### `pictures`
 
 ```python
-pictures() -> list[dict]
+pictures() -> list[Picture]
 ```
 
-Inline and floating pictures in the body, in order.
+A `Picture` for each inline and floating picture in the body, in order
+(sizes in points); `image_of(picture)` gives its bytes.
 
 #### `add_chart`
 
@@ -471,8 +647,8 @@ add_chart(
     categories,
     series,
     *,
-    width: int = 5400000,
-    height: int = 2700000,
+    width: float = 5400000,
+    height: float = 2700000,
     paragraph: OoxElement | None = None,
     descr: str = '',
     **options,
@@ -483,16 +659,16 @@ Insert an inline chart; returns the `w:r` holding it.
 
 `series` is `{"North": [1, 2, 3], ...}` (or `oox.charts.Series`
 objects); the data is also stored in an embedded workbook, so Word's
-"Edit Data" works.  Size in EMU (default 15 x 7.5 cm).  Options are
+"Edit Data" works.  Size in points or `Length` (default 15 x 7.5 cm).  Options are
 those of `oox.charts.build_chart` (title, legend, labels, ...).
 
 #### `charts`
 
 ```python
-charts() -> list[dict]
+charts() -> list[Chart]
 ```
 
-Charts in the body, in order: `oox.charts.chart_info` plus "rid".
+A `Chart` (`oox.records`) for each chart in the body, in order.
 
 #### `add_text_box`
 
@@ -506,10 +682,10 @@ returns its `w:r`.  See `oox.textboxes.add_text_box`.
 **Options** (keywords)
 
 ```python
-width: int = 2160000
-height: int = 1080000
-x: int = 0
-y: int = 0
+width: float = 2160000
+height: float = 1080000
+x: float = 0
+y: float = 0
 h_relative: str = 'column'
 v_relative: str = 'paragraph'
 h_align: str | None = None
@@ -525,8 +701,8 @@ name: str | None = None
 A floating text box; returns the `w:r` holding it.
 
 `content` is text (`\n` starts a paragraph) or a list of `w:p`/
-`w:tbl` elements (or `Table` objects); they are copied in.  `x`/`y`
-are EMU offsets from `h_relative` (column, page, margin, character) and
+`w:tbl` elements (or `Table` objects); they are copied in.  Sizes and
+offsets in points (or `Length`); `x`/`y` are offsets from `h_relative` (column, page, margin, character) and
 `v_relative` (paragraph, page, margin, line); `h_align` (left, center,
 right, inside, outside) and `v_align` (top, center, bottom, inside,
 outside) replace them.  `fill`/`line` are hex colours or None,
@@ -536,27 +712,11 @@ new paragraph at the end of the body.
 #### `text_boxes`
 
 ```python
-text_boxes() -> list[dict]
+text_boxes() -> list[TextBox]
 ```
 
-Text boxes in the body, each once (`oox.textboxes`).
-
-**Details** (from `oox.textboxes`)
-
-Word text boxes, written the way Word 2010 and later write them.
-
-```python
-run = doc.add_text_box("Note\nSecond paragraph", width=Cm(6), height=Cm(3),
-                       x=Cm(10), y=0, wrap="square", fill="FFF2CC")
-doc.text_boxes()          # [{"text": "Note\nSecond paragraph", ...}]
-doc.set_text_box_text(0, "New text")
-```
-
-Each text box is an `mc:AlternateContent` in a run: the choice is a
-DrawingML shape (`wps:wsp`, Word 2010+) and the fallback the same box as
-VML (`v:shape` with `v:textbox`), which is what Word 2007 reads.  Both
-hold the text in a `w:txbxContent` (paragraphs, tables), so the readers
-count each box once and the editors change both copies.
+A `TextBox` (text, paragraphs, vml_only) for each text box in the body,
+each once.
 
 #### `set_text_box_text`
 
@@ -581,11 +741,11 @@ the result is computed now when oox can.
 #### `fields`
 
 ```python
-fields(all_stories: bool = False) -> list[dict]
+fields(all_stories: bool = False) -> list[Field]
 ```
 
-`{"name", "code", "result"}` for the body's fields; `all_stories=True` adds
-headers, footers, notes and comments.
+A `Field` (name, code, result) for each field in the body;
+`all_stories=True` adds headers, footers, notes and comments.
 
 #### `update_fields`
 
@@ -608,7 +768,7 @@ doc.add_cross_reference(p, cap)                  # "Figure 1"
 doc.add_cross_reference(p, cap, what="page")     # page estimate
 doc.add_field(p, "TITLE")                        # the document title
 doc.update_fields()                              # renumber, refresh references
-doc.fields()                                     # [{"name": "SEQ", "code": ..., "result": "1"}, ...]
+doc.fields()                                     # [Field(code="SEQ Figure ...", result="1"), ...]
 ```
 
 Word stores a field's last result in the file and only recomputes it on F9 or
@@ -747,12 +907,13 @@ Word's "Track Changes" switch (`w:trackRevisions` in settings).
 #### `revisions`
 
 ```python
-revisions() -> list[dict]
+revisions() -> list[Revision]
 ```
 
-Tracked changes in document order (body first, then other stories): `{"kind",
-"author", "date", "text"}`; `kind` is insert, delete, move-from, move-to,
-paragraph-insert, paragraph-delete, row-insert, row-delete or format.
+A `Revision` (kind, author, date, text) for each tracked change, in
+document order (body first, then other stories); `kind` is insert, delete,
+move-from, move-to, paragraph-insert, paragraph-delete, row-insert,
+row-delete or format.
 
 #### `accept_all`
 
@@ -803,7 +964,7 @@ doc.add_checkbox(p, tag="agree", checked=False)
 
 doc.fill_controls({"name": "Ada", "dept": "Finance",
                    "start": date(2026, 11, 14), "agree": True})
-doc.content_controls()   # [{"tag": "name", "type": "text", "value": "Ada", ...}, ...]
+doc.content_controls()   # [ContentControl(tag="name", type="text", value="Ada", ...)]
 ```
 
 Controls are inline (inside a paragraph).  Readers also see block-level ones
@@ -866,13 +1027,13 @@ shows the ☐/☒ character).
 #### `content_controls`
 
 ```python
-content_controls() -> list[dict]
+content_controls() -> list[ContentControl]
 ```
 
-Every content control (body, headers, footers, notes) in order: `{"tag", "title",
-"type", "value", "placeholder", ...}`.  `value` is the text (None while the
-placeholder shows), a bool for check boxes; drop-downs add `items`, dates add
-`date`.
+A `ContentControl` (tag, title, type, value, placeholder ...) for every
+content control (body, headers, footers, notes), in order.  `value` is the
+text (None while the placeholder shows), a bool for check boxes; drop-downs
+have `items`, dates a `date`.
 
 #### `fill_controls`
 
@@ -909,11 +1070,11 @@ files).  `formatting=True` also limits formatting to allowed styles.
 #### `protection`
 
 ```python
-protection() -> dict | None
+protection() -> Protection | None
 ```
 
-The editing restriction: `{"edit", "enforced", "password", "algorithm",
-"formatting"}`, or None.
+The editing restriction as a `Protection` (edit, enforced, password,
+algorithm, formatting), or None.
 
 #### `check_protection_password`
 
@@ -1012,10 +1173,10 @@ Repeat the first `n` rows at the top of each page.
 ### `set_row_height`
 
 ```python
-set_row_height(row: int, twips: int, rule: str = 'atLeast') -> None
+set_row_height(row: int, height: float, rule: str = 'atLeast') -> None
 ```
 
-Height of `row` in twips (or EMU from `oox.units`); `rule` "atLeast" or
+Height of `row` in points (or `Length`); `rule` "atLeast" or
 "exact".
 
 ### `set_text`
@@ -1029,11 +1190,11 @@ Replace the cell's content with one paragraph of `text`.
 ### `set_widths`
 
 ```python
-set_widths(widths: list[int]) -> None
+set_widths(widths: list[float]) -> None
 ```
 
-Fixed column widths (twips or EMU); updates the grid, every cell and
-the table width, and switches to a fixed layout.
+Fixed column widths in points (or `Length`); updates the grid, every
+cell and the table width, and switches to a fixed layout.
 
 ### `text`
 
@@ -1057,7 +1218,7 @@ top-left) are `None`.
 
 *read-only property*
 
-Column widths from the table grid, in twips.
+Column widths from the table grid, in points.
 
 ### `word_row_count`
 
@@ -1068,20 +1229,44 @@ continuation cells don't count.
 
 ## `Section`
 
+One section of a Word document: page setup, headers and footers.
+
+Reading never changes the document: a section without page size or
+margins reports Word's defaults, and a document without any section
+(`w:sectPr`) gets a default section that is added to it only when
+something is set on it.
+
 ### `different_first_page`
 
 *property*
 
 Whether the section's first page has its own header and footer (assignable).
 
+### `ensure_footer`
+
+```python
+ensure_footer(kind: str = 'default') -> OoxElement
+```
+
+This section's own footer of `kind`, created (or split off) if needed.
+
+### `ensure_header`
+
+```python
+ensure_header(kind: str = 'default') -> OoxElement
+```
+
+This section's own header of `kind`, created if it has none, or split
+off if it shares one with another section.  "first" also turns on a
+different first page, "even" different even and odd pages.
+
 ### `footer`
 
 ```python
-footer(kind: str = 'default', create: bool = True) -> OoxElement | None
+footer(kind: str = 'default') -> OoxElement | None
 ```
 
-The section's footer of `kind` ("default", "first", "even") as a `w:ftr`
-element, created if missing (`create=False`: None instead).
+This section's own footer of `kind` as a `w:ftr` element, or None.
 
 ### `footer_text`
 
@@ -1095,10 +1280,12 @@ Set the footer of `kind` to `text`; `{PAGE}`, `{NUMPAGES}` and
 ### `header`
 
 ```python
-header(kind: str = 'default', create: bool = True) -> OoxElement | None
+header(kind: str = 'default') -> OoxElement | None
 ```
 
-The `w:hdr` of this section (creating its own if needed).
+This section's own header of `kind` ("default", "first", "even") as
+a `w:hdr` element, or None if it has none (`shown()` follows "Link to
+Previous"; `ensure_header()` creates one).
 
 ### `header_text`
 
@@ -1122,7 +1309,8 @@ shows the previous section's.
 
 *read-only property*
 
-Twips: top, right, bottom, left, header, footer, gutter.
+Points: top, right, bottom, left, header, footer, gutter; Word's
+defaults where the section doesn't say.
 
 ### `orientation`
 
@@ -1134,22 +1322,30 @@ Twips: top, right, bottom, left, header, footer, gutter.
 
 *read-only property*
 
-Page height in twips.
+Page height in points (Letter's when the section doesn't say).
 
 ### `page_width`
 
 *read-only property*
 
-Page width in twips.
+Page width in points (Letter's when the section doesn't say).
 
 ### `set_margins`
 
 ```python
-set_margins(**twips: int) -> None
+set_margins(**margins: float) -> None
 ```
 
-Set margins in twips (or EMU from `oox.units`): `top`, `right`, `bottom`,
+Set margins in points (or `Length`): `top`, `right`, `bottom`,
 `left`, `header`, `footer`, `gutter`.
+
+### `set_page_size`
+
+```python
+set_page_size(width: float, height: float) -> None
+```
+
+Page size in points (or `Length`); the orientation follows.
 
 ### `shown`
 
@@ -1159,6 +1355,10 @@ shown(what: str = 'header', kind: str = 'default') -> OoxElement | None
 
 The header/footer this section actually shows, following "Link to
 Previous" back through earlier sections; None if there is none.
+
+None means Word shows nothing there.  In particular, with a different
+first page (`kind="first"`) and no first-page header in this or an
+earlier section, the first page has no header: not the default one.
 
 ### `start`
 
@@ -1170,7 +1370,7 @@ How the section starts: nextPage (default), continuous, evenPage, oddPage.
 
 *read-only property*
 
-Width between the margins in twips (the space a full-width table gets).
+Width between the margins in points (the space a full-width table gets).
 
 ## `ListHandle`
 
@@ -1225,6 +1425,9 @@ Field(
     result: str = '',
 ) -> None
 ```
+
+A field: its `code` ("SEQ Figure \* ARABIC"), `name` ("SEQ"),
+cached `result`, `kind` ("simple" or "complex") and elements.
 
 Fields: `code`, `kind`, `element`, `separate`, `end`, `result`
 

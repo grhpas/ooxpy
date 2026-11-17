@@ -32,28 +32,52 @@ doc.add_run(p, ". Figures are in ")
 doc.add_run(p, "EUR thousands", italic=True, font="Georgia", size=10)
 doc.add_run(p, ".")
 doc.format_paragraph(p, align="justify", space_after=12, line_spacing=1.15,
-                     first_line=360)
+                     first_line=18)
 ```
 
-`add_run` takes `bold`, `italic`, `underline`, `strike`, `size` (points), `font`,
-`color`, `highlight`, `superscript`, `subscript`, `caps`, `small_caps` and a character
-`style`. `format_paragraph` takes `align`, `space_before`/`space_after` (points),
-`line_spacing` (a multiple, or `"12pt"` for exact), `indent_left`, `indent_right`,
-`first_line` (twips or EMU; negative for a hanging indent), `keep_with_next`,
-`keep_together` and `page_break_before`.
+Every length is in points, as in Word's dialogs; a length from `oox.units` (`Cm(1)`,
+`Inches(0.5)`) works too.
+
+`add_run` takes `bold`, `italic`, `underline`, `strike`, `double_strike`, `size`, `font`,
+`color`, `highlight`, `superscript`, `subscript`, `caps`, `small_caps`, `shading`,
+`letter_spacing`, `hidden`, `language`, `border` and a character `style`.
+`format_paragraph` takes `align`, `space_before`/`space_after`, `line_spacing`,
+`indent_left`, `indent_right`, `first_line` (negative for a hanging indent),
+`keep_with_next`, `keep_together`, `page_break_before`, `widow_control`,
+`contextual_spacing`, `outline_level`, `shading`, `borders` and `tabs`:
+
+```python
+from oox.formatting import Border, LineSpacing, Tab
+
+q = doc.add_paragraph("Total\t1,250")
+doc.format_paragraph(q, line_spacing=LineSpacing.exactly(14),
+                     tabs=[Tab(400, "right", leader="dot")],
+                     borders={"top": Border("single", width=0.5)})
+```
+
+`line_spacing` is a multiple (`1.15`) or a `LineSpacing`: `LineSpacing.multiple(1.5)`,
+`.exactly(12)` or `.at_least(12)`.
 
 **Styles** are better than direct formatting for anything repeated:
 
 ```python
-note = doc.add_style("Note", italic=True, color="595959", indent_left=720,
+note = doc.add_style("Note", italic=True, color="595959", indent_left=36,
                      space_before=6)                    # returns the style id
 n = doc.add_paragraph("All figures are unaudited.", style="Note")
-fmt = doc.effective_format(n)                           # what Word will apply
-print(fmt["italic"], fmt["color"], fmt["font"])          # True 595959 Calibri
+fmt = doc.formatting()                                  # what Word will apply
+print(fmt.paragraph(n).indent_left, fmt.mark(n).italic, fmt.mark(n).font)
+# 36.0 True Calibri
 ```
 
-`effective_format(paragraph, run=None)` resolves defaults, the style chain, character
-styles, direct formatting and theme fonts, the way Word does.
+`doc.formatting()` returns a resolver: `.paragraph(p)` gives a `ParagraphFormat`,
+`.run(r)` a `RunFormat` and `.mark(p)` the paragraph mark's `RunFormat`. It applies the
+layers Word applies, in Word's order: document defaults, the table style (including
+its conditional formats for header rows, banding and so on), the paragraph style
+chain, numbering indents, character styles and direct formatting, with Word's rules
+for bold and italic in styles and theme fonts looked up. The values come back in the
+forms the writers take, so `doc.format_paragraph(other, line_spacing=pf.line_spacing)`
+copies a setting. `doc.effective_format(paragraph, run=None)` is a shortcut for one
+`RunFormat`. See [Reading a document as Word shows it](reading.md).
 
 ## Lists
 
@@ -68,12 +92,18 @@ steps.add("Publish")
 again = steps.restart()
 again.add("A new numbered list")
 
-print([label for _, label in doc.list_labels()])
+print([item.label for item in doc.list_labels()])
 # ['1.', 'a.', 'b.', '2.', '1.']
 ```
 
 `list_labels()` computes the labels Word displays for every list paragraph in the
-document, including lists that come from styles and from other producers' files.
+document, including lists that come from styles, numbering styles and other
+producers' files. Each `ListItem` has the `paragraph`, `label`, `level`, `num_id`,
+`abstract_id`, number `format`, the label's `font`, the `suffix` after it ("tab",
+"space" or "nothing") and, for picture bullets, the image element. Bullets stored as
+symbol-font codes come back as the Unicode character that looks the same ("•");
+`raw_label` keeps the stored characters. `list_labels(all_stories=True)` adds headers,
+footers, footnotes, endnotes and comments.
 
 ## Sections, headers and footers
 
@@ -84,7 +114,7 @@ first.different_first_page = True
 # tabs: centre and right stops
 first.header_text("Example Ltd\t\tConfidential")
 first.footer_text("Page {PAGE} of {NUMPAGES}", align="center")
-first.set_margins(left=1800, right=1800)                  # twips (or EMU)
+first.set_margins(left=90, right=90)                      # points, or Cm(3.2)
 
 # a landscape section for wide material
 wide = doc.add_section(landscape=True)
@@ -95,13 +125,15 @@ print(wide.orientation, wide.text_width > first.text_width)   # landscape True
 
 A new section shares the previous section's headers and footers until you write its
 own, as in Word. `{PAGE}`, `{NUMPAGES}` and `{SECTIONPAGES}` become fields. For full
-control, `section.header()` returns the header part's root element.
+control, `section.ensure_header()` returns the header's root element (creating the
+header if the section has none); `section.header()` only reads, returning `None`
+when there is none, and `section.shown()` follows "Link to Previous".
 
 ## Links, bookmarks, notes and comments
 
 ```python
 p = doc.add_paragraph("The method follows ")
-doc.add_hyperlink(p, "ECMA-376", url="https://ecma-international.org/")
+doc.add_hyperlink(p, "ECMA-376", target="https://ecma-international.org/")
 doc.add_run(p, "; details are in ")
 doc.add_hyperlink(p, "the appendix", anchor="appendix")
 doc.add_run(p, ".")
@@ -114,7 +146,7 @@ doc.add_comment(p, "Check the edition with legal.", author="Ada Lovelace")
 print(doc.hyperlinks())
 # [('ECMA-376', 'https://ecma-international.org/'), ('the appendix', '#appendix')]
 print(doc.footnotes())          # [(1, 'Fourth edition, 2012.')]
-print(doc.comments()[0]["author"])
+print(doc.comments()[0].author)
 ```
 
 ## Tables
@@ -150,14 +182,14 @@ doc.add_picture("logo.png", width=Cm(3))
 title = doc.add_heading("Sales by region", 1)
 doc.add_floating_picture("logo.png", width=Cm(2), h_align="right", h_relative="margin",
                          paragraph=title, wrap="square", descr="Company logo")
-print([pic["wrap"] for pic in doc.pictures()])             # ['inline', 'square']
+print([pic.wrap for pic in doc.pictures()])             # ['inline', 'square']
 ```
 
 Images can be file names, paths, bytes or file objects; PNG, JPEG, GIF, BMP, TIFF, EMF,
 WMF and SVG (with a PNG `fallback=` for Office before 2016) are read without any
 imaging library. Give one dimension to keep the aspect ratio. Wrapping can be
 `square`, `tight`, `through`, `topAndBottom`, `front` or `behind`; positions are
-offsets (`x`, `y` in EMU) or alignments (`h_align`, `v_align`) relative to the column,
+offsets (`x`, `y` in points) or alignments (`h_align`, `v_align`) relative to the column,
 page, margin, paragraph or line.
 
 ## Text boxes
@@ -165,7 +197,7 @@ page, margin, paragraph or line.
 ```python
 box = doc.add_text_box("Note\nPreliminary figures", width=Cm(5), height=Cm(2.5),
                        h_align="right", h_relative="margin", fill="FFF2CC", line="BF9000")
-print(doc.text_boxes()[0]["text"].splitlines())
+print(doc.text_boxes()[0].text.splitlines())
 # ['Note', 'Preliminary figures']
 doc.set_text_box_text(0, "Note\nFinal figures")
 ```
@@ -199,7 +231,7 @@ doc.add_run(p, "), the trend holds.")
 doc.properties.title = "Annual report"
 # filled from the properties
 doc.add_field(doc.add_paragraph(), "TITLE")
-print([(f["name"], f["result"]) for f in doc.fields()][:3])
+print([(f.name, f.result) for f in doc.fields()][:3])
 # [('SEQ', '1'), ('REF', 'Figure 1'), ('REF', 'above')]
 ```
 
@@ -241,7 +273,7 @@ doc.suggest_insert(p, " Figures are unaudited.", author="Finance", date=when)
 # edits made later in Word are tracked too
 doc.track_changes = True
 
-print([(r["kind"], r["text"]) for r in doc.revisions()])
+print([(r.kind, r.text) for r in doc.revisions()])
 # [('delete', '8%'), ('insert', '9%'), ('insert', ' Figures are unaudited.')]
 ```
 
@@ -262,7 +294,7 @@ form.save("leave-form.docx")
 
 form.fill_controls({"name": "Ada Lovelace", "type": "Annual leave",
                     "from": dt.date(2026, 12, 21), "informed": True})
-print({c["tag"]: c["value"] for c in form.content_controls()})
+print({c.tag: c.value for c in form.content_controls()})
 # {'name': 'Ada Lovelace', 'type': 'Annual leave', 'from': '21 December 2026',
 #  'informed': True}
 ```
@@ -275,7 +307,7 @@ tags raise unless `strict=False`), so a template made in Word can be filled from
 ```python
 # or "readOnly", "comments", "trackedChanges"
 form.protect("forms", password="secret")
-print(form.protection()["edit"])              # forms
+print(form.protection().edit)              # forms
 print(form.check_protection_password("secret"))
 form.unprotect()
 ```

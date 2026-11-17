@@ -39,7 +39,7 @@ These can't be made identical by any library. They're properties of OOXML.
 | `Style(name=…, family=…)` | `w.Style(w.Name(val=…), type=…, styleId=…)` | The display name and the ID are separate; references use the ID. |
 | `List(stylename=…)` with nested `ListItem(P(…))` | `lst = doc.new_list("decimal")`; `lst.add(text, level)` | OOXML has no list container: each paragraph points at a numbering definition (`w:numPr`), and the level is a number, not nesting. |
 | `Note(noteclass="footnote")` with `NoteCitation` and `NoteBody` inline in the paragraph | `doc.add_footnote(p, text)`, `doc.add_endnote(p, text)` | Note text lives in a separate part (`footnotes.xml`); the paragraph only holds a reference by id. |
-| `A(href=…)` | `doc.add_hyperlink(p, text, url=…)`; `anchor=` for a bookmark | The URL is an external relationship, referenced by `r:id`. |
+| `A(href=…)` | `doc.add_hyperlink(p, text, target=…)`; `anchor=` for a bookmark | The URL is an external relationship, referenced by `r:id`. |
 | `Annotation(creator=…)` inline | `doc.add_comment(p, text, author=…)` | Comments are a separate part; the paragraph marks the range (`commentRangeStart`/`End`). |
 | `TableOfContent` with a `TableOfContentSource` | `doc.add_toc(levels=(1, 3))` | A Word TOC is a field (`TOC \o "1-3"`) whose cached result is the entries. |
 | Header and footer in the master page (`style.Header`, `PageNumber`) | `doc.sections[i].header_text("… {PAGE} …")` | Headers are separate parts referenced per section, with first/even variants; page numbers are fields. |
@@ -50,7 +50,7 @@ These can't be made identical by any library. They're properties of OOXML.
 | `text:user-defined` / `meta:user-defined` | `doc.custom_properties["Name"] = value` and `doc.add_field(p, 'DOCPROPERTY "Name"')` | Custom properties live in `docProps/custom.xml`, typed. |
 | Form controls (`form:text`, `form:listbox` …) | `add_text_control`, `add_dropdown`, `add_date_control`, `add_checkbox`; `fill_controls` | Word forms are content controls (`w:sdt`) in the text, not a separate form layer. |
 | `style:text-properties` in automatic styles | `doc.add_run(p, text, bold=True, color=...)`, or `doc.add_style(name, ...)` | Direct formatting sits on the run (`w:rPr`); named styles are separate. |
-| `TableColumn(stylename=width)` | `w.TblGrid(w.GridCol(w=twips), …)` | Column widths live in the table grid, in twips. |
+| `TableColumn(stylename=width)` | `w.TblGrid(w.GridCol(w=twips), …)` | Column widths live in the table grid, in twips; `doc.add_table(widths=)` takes points. |
 | `numbercolumnsrepeated=n` | repeat the element | OOXML has no repeat attribute. |
 | file suffix `.odt`/`.ods`/`.odp` | `.docx`/`.xlsx`/`.pptx` | `addsuffix=True` picks the right one. |
 | `addPicture()` returns a manifest path for `draw:image href=` | returns an `r:id` for `a:blip r:embed=`; usually you'd call `add_picture()`, which also builds the drawing XML | OOXML references media through relationships, not paths. |
@@ -62,8 +62,8 @@ These can't be made identical by any library. They're properties of OOXML.
 | `calcext:conditional-formats` | `book.conditional_format(sheet, ref, rule, ...)` | Rules sit in the sheet; highlight styles are differential formats in the stylesheet. |
 | `office:annotation` in a cell | `book.add_comment(sheet, ref, text, author=)` | The text is in a comments part, the note box in a legacy VML drawing. |
 | `text:a` in a cell | `book.add_hyperlink(sheet, ref, url_or_#location)` | Links are listed per sheet; external targets are relationships. |
-| `table:print-ranges`, `style:page-layout` | `book.page_setup(sheet, ...)` | Print area and titles are defined names (`_xlnm.Print_Area`); page settings sit in the sheet. |
-| `table:protected`, `table:display="false"` | `book.protect_sheet(...)`, `book.sheet_options(sheet, hidden=True)` | |
+| `table:print-ranges`, `style:page-layout` | `book.set_page_setup(sheet, ...)` | Print area and titles are defined names (`_xlnm.Print_Area`); page settings sit in the sheet. |
+| `table:protected`, `table:display="false"` | `book.protect_sheet(...)`, `book.set_sheet_options(sheet, hidden=True)` | |
 | `doc.spreadsheet.addElement(Table(name="S"))` | `book.add_sheet("S")` | Each worksheet is its own part with a relationship, not an element in one content.xml. |
 | `TableRow`/`TableCell` with `text=` | `book.append_row(sheet, [values])`, or `x.Row(x.C(x.Is(x.T(...)), r="A1", t="inlineStr"))` | Cells carry their A1 reference and value type explicitly. |
 | `OpenDocumentSpreadsheet()` has no tables | starts with "Sheet1" | Excel refuses a workbook with no sheets. |

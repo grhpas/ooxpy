@@ -102,7 +102,7 @@ def test_edit_changes_only_what_it_must():
 
     path = Path(pptx.__file__).parent / "templates" / "default.pptx"
     deck = PresentationDocument.open(path)
-    deck.add_textbox(deck.add_slide(deck.layouts[6]), 0, 0, 914400, 914400, "x")
+    deck.add_text_box(deck.add_slide(deck.layouts[6]), "x", x=0, y=0, width=72, height=72)
     before, after = _entries(path), _entries(deck.package.to_bytes())
     changed = {n for n in before if before[n] != after.get(n)}
     assert changed == {"[Content_Types].xml", "ppt/presentation.xml",

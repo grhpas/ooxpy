@@ -24,6 +24,7 @@ import datetime as _dt
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from . import drawing
 from .document import RT_OFFICE_DOCUMENT, OoxDocument
@@ -31,7 +32,21 @@ from .element import OoxElement
 from .errors import PackageError
 from .grammar import URI
 from .ns import x, xdr
-from .opc import Package
+from .opc import Package, Part
+
+if TYPE_CHECKING:
+    from .records import (
+        CellFormat,
+        Chart,
+        Comment,
+        ConditionalFormat,
+        ExcelTable,
+        Hyperlink,
+        PageSetup,
+        SheetOptions,
+        Validation,
+        WorkbookProtection,
+    )
 
 X = URI["x"]
 
@@ -210,7 +225,7 @@ class SpreadsheetDocument(OoxDocument):
 
     def _tab_part(self, entry: OoxElement):
         rid = entry.get_attr("r:id")
-        rel = self.main_part.rels.items.get(rid or "")
+        rel = self.main_part.rels.get(rid or "")
         part = self.package.parts.get(self.main_part.resolve(rel.target)) if rel else None
         if part is None:
             raise PackageError(f"sheet {entry.get('name')!r}: broken relationship {rid!r}")
@@ -227,6 +242,22 @@ class SpreadsheetDocument(OoxDocument):
         """Every tab in order: worksheets and chart sheets (``localSheetId``
         and the active tab count these)."""
         return [s.get("name") for s in self._sheet_entries()]
+
+    # The parts behind the workbook, or None when the workbook has none.
+    @property
+    def shared_strings_part(self) -> Part | None:
+        """The shared strings part (``xl/sharedStrings.xml``), or None."""
+        return self._first_related("SharedStringTablePart")
+
+    @property
+    def styles_part(self) -> Part | None:
+        """The workbook styles part (``xl/styles.xml``), or None."""
+        return self._first_related("WorkbookStylesPart")
+
+    @property
+    def theme_part(self) -> Part | None:
+        """The theme part (``xl/theme/theme1.xml``), or None."""
+        return self._first_related("ThemePart")
 
     @property
     def sheet_names(self) -> list[str]:
@@ -360,13 +391,15 @@ class SpreadsheetDocument(OoxDocument):
                 elif "s" in target.attrib:
                     del target.attrib["s"]
 
-    def cell_format(self, sheet: str | OoxElement, ref: str) -> dict:
-        """The cell's formatting as ``cell_style`` options (number_format,
-        bold, font, fill, border, align ...)."""
+    def cell_format(self, sheet: str | OoxElement, ref: str) -> CellFormat:
+        """The cell's formatting as a ``CellFormat`` with ``cell_style``'s options
+        (number_format, bold, font, fill, border, align ...)."""
+        from .records import CellFormat
         from .xlstyles import StyleSheet
 
         c = self.cell_element(sheet, ref)
-        return StyleSheet(self, create=False).describe(int(c.get("s", "0")) if c is not None else 0)
+        return CellFormat(**StyleSheet(self, create=False).describe(
+            int(c.get("s", "0")) if c is not None else 0))
 
     def display_text(self, sheet: str | OoxElement, ref: str) -> str:
         """The text Excel shows in the cell (number format applied; formula
@@ -379,7 +412,7 @@ class SpreadsheetDocument(OoxDocument):
         raw = self._decode(c, self._shared_strings(), False)
         if isinstance(raw, CellError):
             return str(raw)
-        return format_value(raw, self.cell_format(sheet, ref)["number_format"])
+        return format_value(raw, self.cell_format(sheet, ref).number_format or "General")
 
     # -- reading ----------------------------------------------------------------
     # -- read caches ----------------------------------------------------------------
@@ -680,33 +713,32 @@ class SpreadsheetDocument(OoxDocument):
         return converted
 
     # -- print setup and sheet options ------------------------------------------
-    def page_setup(self, sheet: str, **options) -> None:
+    def set_page_setup(self, sheet: str, **options) -> None:
         """Orientation, paper, fit to pages, scale, margins, print area,
         repeated rows/columns, header and footer, gridlines, centring; see
-        ``oox.xlprint.page_setup``."""
+        ``oox.xlprint.set_page_setup``."""
+        from .xlprint import set_page_setup
+
+        set_page_setup(self, sheet, **options)
+
+    def page_setup(self, sheet: str) -> PageSetup:
+        """The sheet's print setup as a ``PageSetup`` (``set_page_setup``'s options;
+        None where the sheet doesn't say; margins in points)."""
         from .xlprint import page_setup
 
-        page_setup(self, sheet, **options)
+        return page_setup(self, sheet)
 
-    def page_setup_info(self, sheet: str) -> dict:
-        """``{"orientation", "paper", "margins", ...}``: the sheet's print setup, with
-        ``fit``, ``scale``, ``print_area``, ``repeat_rows``, ``header``/``footer`` where
-        set."""
-        from .xlprint import page_setup_info
-
-        return page_setup_info(self, sheet)
-
-    def sheet_options(self, sheet: str, **options) -> None:
+    def set_sheet_options(self, sheet: str, **options) -> None:
         """tab_color, hidden (True/False/"very"), zoom, gridlines."""
+        from .xlprint import set_sheet_options
+
+        set_sheet_options(self, sheet, **options)
+
+    def sheet_options(self, sheet: str) -> SheetOptions:
+        """The sheet's ``SheetOptions`` (tab_color, hidden, zoom, gridlines, protected)."""
         from .xlprint import sheet_options
 
-        sheet_options(self, sheet, **options)
-
-    def sheet_options_info(self, sheet: str) -> dict:
-        """``{"tab_color", "hidden", "protected", "zoom", "gridlines"}`` for the sheet."""
-        from .xlprint import sheet_options_info
-
-        return sheet_options_info(self, sheet)
+        return sheet_options(self, sheet)
 
     def protect_sheet(self, sheet: str, password: str | None = None, *,
                       allow: tuple[str, ...] = ()) -> None:
@@ -731,8 +763,8 @@ class SpreadsheetDocument(OoxDocument):
 
         protect_workbook(self, password=password, structure=structure, windows=windows)
 
-    def workbook_protection(self) -> dict | None:
-        """``{"structure", "windows", "password"}`` (booleans), or None."""
+    def workbook_protection(self) -> WorkbookProtection | None:
+        """The workbook's ``WorkbookProtection`` (structure, windows, password), or None."""
         from .protection import workbook_protection
 
         return workbook_protection(self)
@@ -758,8 +790,8 @@ class SpreadsheetDocument(OoxDocument):
 
         return add_comment(self, sheet, ref, text, author=author, visible=visible)
 
-    def comments(self, sheet: str) -> dict[str, tuple[str, str]]:
-        """``{ref: (author, text)}`` for the sheet's comments; the "Author:" line Excel puts
+    def comments(self, sheet: str) -> dict[str, Comment]:
+        """``{ref: Comment}`` for the sheet's comments; the "Author:" line Excel puts
         first is removed."""
         from .xlnotes import comments
 
@@ -772,8 +804,9 @@ class SpreadsheetDocument(OoxDocument):
 
         return add_hyperlink(self, sheet, ref, target, text=text, tooltip=tooltip, style=style)
 
-    def hyperlinks(self, sheet: str) -> dict[str, str]:
-        """``{ref: target}``: a URL, or ``#Sheet!A1`` for a link inside the workbook."""
+    def hyperlinks(self, sheet: str) -> dict[str, Hyperlink]:
+        """``{ref: Hyperlink}``: ``target`` a URL, or ``#Sheet!A1`` for a link inside
+        the workbook."""
         from .xlnotes import hyperlinks
 
         return hyperlinks(self, sheet)
@@ -790,8 +823,8 @@ class SpreadsheetDocument(OoxDocument):
         return add_table(self, sheet, ref, name=name, style=style, totals=totals,
                          stripes=stripes, first_column=first_column, last_column=last_column)
 
-    def tables(self, sheet: str) -> list[dict]:
-        """``{"name", "ref", "columns", "style", "totals", "header"}`` for each table on the
+    def tables(self, sheet: str) -> list[ExcelTable]:
+        """An ``ExcelTable`` (name, ref, columns, style, switches) for each table on the
         sheet."""
         from .xltables import tables
 
@@ -804,10 +837,9 @@ class SpreadsheetDocument(OoxDocument):
 
         return conditional_format(self, sheet, ref, rule, **options)
 
-    def conditional_formats(self, sheet: str) -> list[dict]:
-        """``{"range", "type", "priority", ...}`` per rule, in priority order, with
-        ``operator``, ``formulas``, ``style``, ``colors``, ``icons``, ``rank`` or ``text``
-        where they apply."""
+    def conditional_formats(self, sheet: str) -> list[ConditionalFormat]:
+        """A ``ConditionalFormat`` per rule, in priority order, with
+        ``conditional_format``'s options where they apply."""
         from .xlcond import conditional_formats
 
         return conditional_formats(self, sheet)
@@ -864,11 +896,11 @@ class SpreadsheetDocument(OoxDocument):
 
         return merged_cells(self._ws(sheet))
 
-    def freeze_panes(self, sheet: str, ref: str | None) -> None:
+    def set_frozen_panes(self, sheet: str, ref: str | None) -> None:
         """Freeze the rows above and columns left of ``ref`` ("B2"); None unfreezes."""
-        from .xlsheet import freeze_panes
+        from .xlsheet import set_frozen_panes
 
-        freeze_panes(self._ws(sheet), ref)
+        set_frozen_panes(self._ws(sheet), ref)
 
     def frozen_panes(self, sheet: str) -> str | None:
         """The top-left unfrozen cell ("B2") if panes are frozen, else None."""
@@ -909,9 +941,8 @@ class SpreadsheetDocument(OoxDocument):
 
         return add_validation(self._ws(sheet), ref, **options)
 
-    def validations(self, sheet: str) -> list[dict]:
-        """``{"range", "type", ...}`` per data-validation rule (lists add ``values``, bounds
-        add ``operator`` and ``formulas``)."""
+    def validations(self, sheet: str) -> list[Validation]:
+        """A ``Validation`` per data-validation rule, with ``add_validation``'s options."""
         from .xlsheet import validations
 
         return validations(self._ws(sheet))
@@ -923,19 +954,19 @@ class SpreadsheetDocument(OoxDocument):
 
         return add_chart(self, sheet, kind, data, **options)
 
-    def charts(self, sheet: str) -> list[dict]:
-        """Charts on a worksheet or chart sheet, in drawing order: ``chart_info`` plus
-        "anchor" (the top-left cell; None on a chart sheet) and "name"."""
+    def charts(self, sheet: str) -> list[Chart]:
+        """A ``Chart`` for each chart on a worksheet or chart sheet, in drawing order,
+        with its ``anchor`` (top-left cell; None on a chart sheet) and ``name``."""
         from .xlcharts import charts
 
         return charts(self, sheet)
 
     def add_picture(self, sheet: str | OoxElement, image, anchor: str = "A1", *,
-                    width: int | None = None, height: int | None = None,
+                    width: float | None = None, height: float | None = None,
                     descr: str = "", fallback=None) -> OoxElement:
         """Float a picture over the sheet with its top-left corner at ``anchor``.
 
-        Size in EMU (``oox.units``); one dimension keeps the aspect ratio.  An
+        Size in points (or ``Length``); one dimension keeps the aspect ratio.  An
         SVG needs ``fallback=`` (a PNG) for Office before 2016.
         """
         ws = self._ws(sheet)
@@ -946,8 +977,10 @@ class SpreadsheetDocument(OoxDocument):
         else:
             dpart, drid = self.add_part("DrawingsPart", ws_part, element=xdr.WsDr())
             ws.add(x.Drawing(r_id=drid))
+        from .document import picture_size
+
         rid, info, svg_rid = self.add_picture_image(image, fallback, dpart)
-        cx, cy = info.scaled(width, height)
+        cx, cy = picture_size(info, width, height)
         col, rw = split_ref(anchor)
         n = drawing.max_shape_id(dpart.element) + 1
         pic = drawing.picture(xdr, n, f"Picture {n}", rid, cx, cy, descr=descr, svg_rid=svg_rid)

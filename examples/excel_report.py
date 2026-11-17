@@ -36,7 +36,7 @@ def main(path: str) -> None:
     book.set_column_width("Orders", "A", 14)
     book.set_column_width("Orders", "B", 22)
     book.set_column_width("Orders", "C:D", 12)
-    book.freeze_panes("Orders", "A2")
+    book.set_frozen_panes("Orders", "A2")
     book.auto_filter("Orders", f"A1:D{total - 1}")
     book.define_name("Amounts", "Orders", f"C2:C{total - 1}")
     book.add_validation("Orders", f"D2:D{total - 1}", values=["Open", "Paid", "Refund"])

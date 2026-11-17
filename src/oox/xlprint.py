@@ -1,16 +1,17 @@
 """Excel print setup and sheet options.
 
-    book.page_setup("Sales", orientation="landscape", paper="A4", fit_width=1,
+    book.set_page_setup("Sales", orientation="landscape", paper="A4", fit_width=1,
                     print_area="A1:F40", repeat_rows="1:1",
                     header="Quarterly report", footer={"right": "Page {page} of {pages}"})
-    book.sheet_options("Sales", tab_color="2F5496")
-    book.sheet_options("Lookup", hidden=True)
+    book.set_sheet_options("Sales", tab_color="2F5496")
+    book.set_sheet_options("Lookup", hidden=True)
     book.protect_sheet("Sales", password="secret")
 
 Header and footer text takes ``{page}``, ``{pages}``, ``{date}``, ``{time}``,
 ``{sheet}`` and ``{file}``; a plain string goes in the centre, a dict places
 "left", "center" and "right".  Sheet protection uses Excel's legacy password
 hash (what Excel 2007 writes): it stops casual edits, not a determined reader.
+Margins are in points (``{"left": 36}``, or a ``Length``).
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from typing import TYPE_CHECKING, Any
 from .element import OoxElement
 from .grammar import URI
 from .ns import x
+from .units import PAGE_LIMIT, twips
 
 if TYPE_CHECKING:
     from .spreadsheet import SpreadsheetDocument
@@ -83,7 +85,7 @@ def _rows_cols(spec: str | tuple[int, int] | None, kind: str) -> str | None:
     return f"${str(a).upper()}:${str(b).upper()}"
 
 
-def page_setup(book: SpreadsheetDocument, sheet: str, *, orientation: str | None = None,
+def set_page_setup(book: SpreadsheetDocument, sheet: str, *, orientation: str | None = None,
                paper: str | None = None, fit_width: int | None = None,
                fit_height: int | None = None, scale: int | None = None,
                margins: dict[str, float] | None = None, print_area: str | None = None,
@@ -112,8 +114,9 @@ def page_setup(book: SpreadsheetDocument, sheet: str, *, orientation: str | None
             m.update({k: float(v) for k, v in old.attrib.items() if k in MARGINS})
         unknown = set(margins or {}) - set(MARGINS)
         if unknown:
-            raise ValueError(f"margins are {list(MARGINS)} (inches): {sorted(unknown)}")
-        m.update(margins or {})
+            raise ValueError(f"margins are {list(MARGINS)} (points): {sorted(unknown)}")
+        m.update({k: round(twips(v, k, PAGE_LIMIT) / 1440, 6)
+                  for k, v in (margins or {}).items()})
         ws.add(x.PageMargins(**m), replace=True)
     ps = ws.first("x:pageSetup")
     if ps is None:
@@ -154,12 +157,20 @@ def page_setup(book: SpreadsheetDocument, sheet: str, *, orientation: str | None
         define_name(book, "_xlnm.Print_Titles", ",".join(targets), local_sheet=idx)
 
 
-def page_setup_info(book: SpreadsheetDocument, sheet: str) -> dict[str, Any]:
+def _strip_sheet(value: str) -> str:
+    return value.rpartition("!")[2].replace("$", "")
+
+
+def page_setup(book: SpreadsheetDocument, sheet: str):
+    """The sheet's print setup as a ``PageSetup`` record (``set_page_setup``
+    options; None where the sheet doesn't say).  Margins in points."""
+    from .records import PageSetup
+
     ws = book.sheet(sheet)
     out: dict[str, Any] = {}
     ps = ws.first("x:pageSetup")
     if ps is not None:
-        out["orientation"] = ps.get("orientation", "default")
+        out["orientation"] = ps.get("orientation")
         size = int(ps.get("paperSize", "1"))
         out["paper"] = next((k for k, v in PAPER.items() if v == size), size)
         if ps.get("scale"):
@@ -171,7 +182,8 @@ def page_setup_info(book: SpreadsheetDocument, sheet: str) -> dict[str, Any]:
             out["fit_height"] = int(ps.get("fitToHeight", "1"))
     m = ws.first("x:pageMargins")
     if m is not None:
-        out["margins"] = {k: float(v) for k, v in m.attrib.items() if k in MARGINS}
+        out["margins"] = {k: round(float(v) * 72, 6) for k, v in m.attrib.items()
+                          if k in MARGINS}
     hf = ws.first("x:headerFooter")
     if hf is not None:
         head, foot = hf.first("x:oddHeader"), hf.first("x:oddFooter")
@@ -179,13 +191,19 @@ def page_setup_info(book: SpreadsheetDocument, sheet: str) -> dict[str, Any]:
         out["footer"] = _hf_text(foot.text if foot is not None else None)
     po = ws.first("x:printOptions")
     if po is not None:
-        out["gridlines"] = po.get("gridLines") in ("1", "true")
+        for key, attr in (("gridlines", "gridLines"), ("center_horizontally", "horizontalCentered"),
+                          ("center_vertically", "verticalCentered")):
+            if po.get(attr) is not None:
+                out[key] = po.get(attr) in ("1", "true")
     names = book.defined_names()
-    for key, label in (("_xlnm.Print_Area", "print_area"), ("_xlnm.Print_Titles", "print_titles")):
-        val = names.get(f"{sheet}!{key}")
-        if val:
-            out[label] = val
-    return out
+    area = names.get(f"{sheet}!_xlnm.Print_Area")
+    if area:
+        out["print_area"] = _strip_sheet(area)
+    titles = names.get(f"{sheet}!_xlnm.Print_Titles")
+    for part in (titles.split(",") if titles else []):
+        spec = _strip_sheet(part)
+        out["repeat_rows" if spec.split(":")[0].isdigit() else "repeat_cols"] = spec
+    return PageSetup(**out)
 
 
 # -- sheet options ------------------------------------------------------------------------
@@ -200,7 +218,7 @@ def excel_password_hash(password: str) -> str:
     return f"{h:04X}"
 
 
-def sheet_options(book: SpreadsheetDocument, sheet: str, *, tab_color: str | None = None,
+def set_sheet_options(book: SpreadsheetDocument, sheet: str, *, tab_color: str | None = None,
                   hidden: bool | str | None = None, zoom: int | None = None,
                   gridlines: bool | None = None) -> None:
     """``tab_color`` (hex, "" removes), ``hidden`` (True, False or "very" --
@@ -257,7 +275,10 @@ def sheet_options(book: SpreadsheetDocument, sheet: str, *, tab_color: str | Non
             view.set("showGridLines", "1" if gridlines else "0")
 
 
-def sheet_options_info(book: SpreadsheetDocument, sheet: str) -> dict[str, Any]:
+def sheet_options(book: SpreadsheetDocument, sheet: str):
+    """The sheet's options as a ``SheetOptions`` record."""
+    from .records import SheetOptions
+
     ws = book.sheet(sheet)
     entry = next(e for e in book._sheet_entries() if e.get("name") == sheet)
     pr = ws.first("x:sheetPr")
@@ -266,13 +287,13 @@ def sheet_options_info(book: SpreadsheetDocument, sheet: str) -> dict[str, Any]:
     prot = ws.first("x:sheetProtection")
     views = ws.first("x:sheetViews")
     view = views.first("x:sheetView") if views is not None else None
-    return {
-        "tab_color": (tab.get("rgb") or "")[-6:] or None if tab is not None else None,
-        "hidden": {"visible": False, "hidden": True, "veryHidden": "very"}.get(state, False),
-        "protected": prot is not None and prot.get("sheet") in ("1", "true"),
-        "zoom": int(view.get("zoomScale", "100")) if view is not None else 100,
-        "gridlines": view.get("showGridLines", "1") not in ("0", "false") if view is not None else True,
-    }
+    return SheetOptions(
+        tab_color=(tab.get("rgb") or "")[-6:] or None if tab is not None else None,
+        hidden={"visible": False, "hidden": True, "veryHidden": "very"}.get(state, False),
+        protected=prot is not None and prot.get("sheet") in ("1", "true"),
+        zoom=int(view.get("zoomScale", "100")) if view is not None else 100,
+        gridlines=view.get("showGridLines", "1") not in ("0", "false") if view is not None
+        else True)
 
 
 def protect_sheet(book: SpreadsheetDocument, sheet: str, password: str | None = None, *,

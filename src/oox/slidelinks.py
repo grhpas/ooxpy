@@ -164,7 +164,7 @@ def set_link(deck: PresentationDocument, slide: OoxElement, shape, target, *,
 def _describe(deck: PresentationDocument, part, link: OoxElement) -> dict:
     action = link.get("action") or ""
     rid = link.get(f"{{{R}}}id") or ""
-    rel = part.rels.items.get(rid) if rid else None
+    rel = part.rels.get(rid) if rid else None
     if action.startswith(_SHOW_JUMP):
         jump = action[len(_SHOW_JUMP):]
         name = {v: k for k, v in SHOW_JUMPS.items()}.get(jump, jump)
@@ -178,18 +178,29 @@ def _describe(deck: PresentationDocument, part, link: OoxElement) -> dict:
     return {"kind": "other", "target": action or None}
 
 
-def links(deck: PresentationDocument, slide: OoxElement) -> list[dict]:
-    """Every click link on a slide, in document order: shape name, linked
-    text (``None`` for a whole-shape link), kind (url, slide, jump, other),
-    target (URL, 1-based slide number, jump name) and tooltip."""
+def _link(deck: PresentationDocument, part, link: OoxElement, shape: str | None,
+          text: str | None):
+    from .records import Hyperlink
+
+    found = _describe(deck, part, link)
+    kind, target = found["kind"], found["target"]
+    if kind == "slide":
+        return Hyperlink(text, anchor=target, tooltip=link.get("tooltip"), kind=kind, shape=shape)
+    return Hyperlink(text, target=target, tooltip=link.get("tooltip"), kind=kind, shape=shape)
+
+
+def links(deck: PresentationDocument, slide: OoxElement) -> list:
+    """A ``Hyperlink`` for every click link on a slide, in document order:
+    ``shape`` name, linked ``text`` (None for a whole-shape link), ``kind``
+    (url, slide, jump, other), ``target`` (URL or jump name) or ``anchor``
+    (1-based slide number), ``tooltip``."""
     part = deck.part_of(slide)
     out = []
     for cnv in deck._tree(slide).iter(f"{{{P}}}cNvPr"):
         holder = cnv.getparent().getparent() if cnv.getparent() is not None else None
         link = cnv.find(f"{{{A}}}hlinkClick")
         if link is not None:
-            out.append({"shape": cnv.get("name"), "text": None,
-                        **_describe(deck, part, link), "tooltip": link.get("tooltip")})
+            out.append(_link(deck, part, link, cnv.get("name"), None))
         if holder is None:
             continue
         body = holder.find(f"{{{P}}}txBody")
@@ -202,9 +213,7 @@ def links(deck: PresentationDocument, slide: OoxElement) -> list[dict]:
                 lk = r.find(f"{{{A}}}rPr/{{{A}}}hlinkClick") if r is not None else None
                 key = (lk.get(f"{{{R}}}id"), lk.get("action")) if lk is not None else None
                 if current is not None and key != current[0]:
-                    out.append({"shape": cnv.get("name"), "text": "".join(texts),
-                                **_describe(deck, part, current[1]),
-                                "tooltip": current[1].get("tooltip")})
+                    out.append(_link(deck, part, current[1], cnv.get("name"), "".join(texts)))
                     current, texts = None, []
                 if lk is not None:
                     if current is None:

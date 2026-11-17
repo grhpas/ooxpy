@@ -289,8 +289,34 @@ def emit(schema: Schema, out_root: Path) -> dict[str, int]:
         stub += alias_stubs
         _write(nsdir / f"{modname(prefix)}.pyi", "\n".join(stub) + "\n")
     mods = sorted(modname(p) for p in by_elprefix)
-    _write(nsdir / "__init__.py", hdr + '\n"""Element factory modules, one per namespace prefix."""\n\n'
-           f"__all__ = {pformat(mods, width=100, compact=True)}\n")
+    consts = {p.upper(): u for p, u, _ in ns_rows}
+    if len(consts) != len(ns_rows):
+        raise ValueError("two namespace prefixes differ only in case")
+    init = [hdr, '"""Namespaces: a constant per prefix holding its URI (``W``, ``A``, ``R``,',
+            '``MC`` ...), ``qn("w:p")`` for the ``{uri}local`` name lxml uses, and the',
+            "element factory modules, one per prefix (``w``, ``a`` ...).",
+            "",
+            "    from oox.ns import W, qn, w",
+            '    paragraphs = body.iter(f"{{{W}}}p")      # same as body.iter(qn("w:p"))',
+            '    p = w.P(w.R(w.T("text")))',
+            '"""',
+            "",
+            "from __future__ import annotations",
+            ""]
+    init += [f"{name} = {uri!r}" for name, uri in sorted(consts.items())]
+    init += ["",
+             "_URI = {" + ", ".join(f"{p!r}: {p.upper()}" for p, _, _ in ns_rows) + "}",
+             "",
+             "",
+             "def qn(name: str) -> str:",
+             '    """``"w:p"`` -> ``"{http://...wordprocessingml/2006/main}p"``; a name',
+             '    without a prefix is returned as it is."""',
+             '    prefix, _, local = name.rpartition(":")',
+             '    return f"{{{_URI[prefix]}}}{local}" if prefix else local',
+             "",
+             "",
+             f"__all__ = {pformat([*sorted(consts), 'qn', *mods], width=100, compact=True)}"]
+    _write(nsdir / "__init__.py", "\n".join(init) + "\n")
     stats["factories"] = n_factories
     stats["aliases"] = n_aliases
     stats["ns_modules"] = len(mods)

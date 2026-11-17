@@ -1,13 +1,15 @@
 """PresentationML (.pptx): the ``OpenDocumentPresentation()`` equivalent.
 
     from oox.presentation import PresentationDocument
-    from oox.units import Inches, Pt
+    from oox.units import Inches
 
     deck = PresentationDocument.new()                       # 16:9, blank layout
     slide = deck.add_slide()
-    deck.add_textbox(slide, Inches(1), Inches(1), Inches(8), Inches(1),
-                     "Quarterly review", size=40, bold=True)
-    deck.add_picture(slide, "chart.png", Inches(1), Inches(2.5), width=Inches(5))
+    deck.add_text_box(slide, "Quarterly review", size=40, bold=True)   # content area
+    deck.add_picture(slide, "chart.png", x=Inches(1), y=Inches(2.5), width=Inches(5))
+
+Positions and sizes are points (or a ``Length``); left out, they default to
+the slide's content area (``deck.content_area(slide)``).
     deck.save("review.pptx")
 
 Placeholders work with any deck -- ours or one made in PowerPoint:
@@ -33,9 +35,10 @@ from .errors import PackageError
 from .grammar import URI
 from .ns import a, p
 from .opc import Package, Part
-from .units import Inches
+from .units import DRAWING_LIMIT, Emu, emu, points
 
 if TYPE_CHECKING:
+    from .records import Chart, Hyperlink, Placeholder, Shape, SlideSection, SlideTableInfo
     from .slidetable import SlideTable
 
 CT_PML_MAIN = {
@@ -240,13 +243,15 @@ class PresentationDocument(OoxDocument):
     MAIN_CONTENT_TYPES = CT_PML_MAIN
 
     @classmethod
-    def new(cls, width: int = 12192000, height: int = 6858000,
+    def new(cls, width: float = Emu(12192000), height: float = Emu(6858000),
             kind: str = ".pptx", layouts: str = "standard") -> PresentationDocument:
-        """New deck (default 13.333 x 7.5 in, i.e. 16:9) with master, theme and
+        """New deck (default 13.333 x 7.5 in, i.e. 16:9; size in points or
+        ``Length``) with master, theme and
         Office's eleven standard layouts (Title Slide, Title and Content, Section
         Header, Two Content, Comparison, Title Only, Blank, Content with Caption,
         Picture with Caption, Title and Vertical Text, Vertical Title and Text);
         ``layouts="basic"`` gives only Title Slide, Title and Content, Blank."""
+        width, height = emu(width, "width", DRAWING_LIMIT), emu(height, "height", DRAWING_LIMIT)
         pkg = Package()
         part = pkg.add_part("/ppt/presentation.xml", CT_PML_MAIN[kind], element=p.Presentation(
             p.SldMasterIdLst(), p.SldSz(cx=width, cy=height), p.NotesSz(cx=6858000, cy=9144000)))
@@ -283,7 +288,7 @@ class PresentationDocument(OoxDocument):
         for m in self.masters:
             lst = m.element.first("p:sldLayoutIdLst")
             for entry in (lst if lst is not None else []):
-                rel = m.rels.items[entry.get_attr("r:id")]
+                rel = m.rels[entry.get_attr("r:id")]
                 out.append(self.package.parts[m.resolve(rel.target)])
         return out
 
@@ -331,7 +336,7 @@ class PresentationDocument(OoxDocument):
             return []
         out = []
         for entry in lst:
-            rel = self.main_part.rels.items[entry.get_attr("r:id")]
+            rel = self.main_part.rels[entry.get_attr("r:id")]
             out.append(self.package.parts[self.main_part.resolve(rel.target)].element)
         return out
 
@@ -376,25 +381,31 @@ class PresentationDocument(OoxDocument):
 
     def set_sections(self, sections) -> None:
         """Slide sections: ``[(name, first slide), ...]`` (slide elements or
-        1-based numbers); ``[]`` removes them.  See ``oox.sections_pml``."""
+        1-based numbers) or ``SlideSection`` records as ``sections()`` reads them;
+        ``[]`` removes them.  See ``oox.sections_pml``."""
         from .sections_pml import set_sections
 
         set_sections(self, sections)
 
-    def sections(self) -> list[tuple[str, list[int]]]:
-        """``[(name, [slide numbers]), ...]``."""
+    def sections(self) -> list[SlideSection]:
+        """A ``SlideSection`` (name, slide numbers) per section."""
         from .sections_pml import sections
 
         return sections(self)
 
     # -- placeholders -----------------------------------------------------------
-    def placeholders(self, slide: OoxElement) -> list[tuple[str, int, OoxElement]]:
-        """``(type, idx, shape)`` for each placeholder on a slide (or layout)."""
+    def placeholders(self, slide: OoxElement) -> list[Placeholder]:
+        """A ``Placeholder`` (type, idx, name, element) for each placeholder on a
+        slide (or layout)."""
+        from .records import Placeholder
+
         out = []
         for shape in self._tree(slide):
             info = placeholder_info(shape) if isinstance(shape, OoxElement) else None
             if info is not None:
-                out.append((info[0], info[1], shape))
+                cnv = shape.find(f".//{{{URI['p']}}}cNvPr")
+                out.append(Placeholder(info[0], info[1], cnv.get("name") if cnv is not None
+                                       else None, shape))
         return out
 
     def placeholder(self, slide: OoxElement, which: str | int) -> OoxElement:
@@ -402,14 +413,16 @@ class PresentationDocument(OoxDocument):
         the aliases "title" (title/ctrTitle), "subtitle", "body" (body/obj)."""
         phs = self.placeholders(slide)
         if isinstance(which, int):
-            hits = [sh for _, idx, sh in phs if idx == which]
+            hits = [ph.element for ph in phs if ph.idx == which]
         else:
             types = _ALIASES.get(which, {which})
-            hits = [sh for t, _, sh in sorted(phs, key=lambda e: e[1]) if t in types]
+            hits = [ph.element for ph in sorted(phs, key=lambda e: e.idx) if ph.type in types]
         if not hits:
-            have = ", ".join(f"{t}/{i}" for t, i, _ in phs) or "none"
+            have = ", ".join(f"{ph.type}/{ph.idx}" for ph in phs) or "none"
             raise KeyError(f"no placeholder {which!r} on this slide (has: {have})")
-        return hits[0]
+        found = hits[0]
+        assert found is not None
+        return found
 
     def set_placeholder_text(self, slide: OoxElement, which: str | int,
                              text: str | list, *, lang: str = "en-US") -> OoxElement:
@@ -437,14 +450,55 @@ class PresentationDocument(OoxDocument):
     def _tree(slide: OoxElement) -> OoxElement:
         return slide.need("p:cSld").need("p:spTree")
 
-    def add_textbox(self, slide: OoxElement, x: int, y: int, cx: int, cy: int, text: str, *,
-                    size: float | None = None, bold: bool = False, color: str | None = None,
-                    align: str | None = None, lang: str = "en-US") -> OoxElement:
-        """Add a text box; ``\\n`` starts a new paragraph.  ``size`` in points,
-        ``color`` as hex RGB, ``align`` one of left/center/right/justify."""
+    @property
+    def slide_size(self) -> tuple[float, float]:
+        """(width, height) of the slides in points."""
+        sz = self.presentation.first("p:sldSz")
+        cx, cy = (int(sz.get("cx")), int(sz.get("cy"))) if sz is not None else (12192000, 6858000)
+        return points(cx), points(cy)
+
+    def content_area(self, slide: OoxElement) -> tuple[float, float, float, float]:
+        """(x, y, width, height) in points of the slide's content area: the body
+        placeholder of its master (where "Title and Content" puts its text).
+        Shapes, tables, charts and pictures go there when no position is given."""
+        part = self.part_of(slide)
+        layouts = self.related_parts(part, "SlideLayoutPart")
+        masters = self.related_parts(layouts[0], "SlideMasterPart") if layouts else []
+        for root in [lay.element for lay in layouts] + [m.element for m in masters]:
+            for shape in root.iter(f"{{{URI['p']}}}sp"):
+                info = placeholder_info(shape)
+                off = shape.find(f"{{{URI['p']}}}spPr/{{{URI['a']}}}xfrm/{{{URI['a']}}}off")
+                ext = shape.find(f"{{{URI['p']}}}spPr/{{{URI['a']}}}xfrm/{{{URI['a']}}}ext")
+                if info and info[0] in ("body", "obj") and off is not None and ext is not None:
+                    return (points(int(off.get("x"))), points(int(off.get("y"))),
+                            points(int(ext.get("cx"))), points(int(ext.get("cy"))))
+        sw, sh = self.slide_size
+        return tuple(round(v, 6) for v in _scaled(_BODY, sw / 12192000, sh / 6858000))  # type: ignore[return-value]
+
+    def _box(self, slide: OoxElement, x, y, width, height) -> tuple[int, int, int, int]:
+        """EMU geometry from optional points/``Length``, defaulting to the content area."""
+        ax, ay, aw, ah = self.content_area(slide)
+        return (emu(ax if x is None else x, "x", DRAWING_LIMIT),
+                emu(ay if y is None else y, "y", DRAWING_LIMIT),
+                emu(aw if width is None else width, "width", DRAWING_LIMIT),
+                emu(ah if height is None else height, "height", DRAWING_LIMIT))
+
+    def add_text_box(self, slide: OoxElement, text: str, *, x: float | None = None,
+                     y: float | None = None, width: float | None = None,
+                     height: float | None = None, size: float | None = None,
+                     bold: bool = False, color: str | None = None, align: str | None = None,
+                     lang: str = "en-US") -> OoxElement:
+        """Add a text box; ``\n`` starts a new paragraph.  Position and size in
+        points (or ``Length``), by default the content area's top, as wide as
+        it and as tall as the text; ``size`` in points, ``color`` as hex RGB,
+        ``align`` one of left/center/right/justify."""
+        lines = text.split("\n")
+        if height is None:  # the box grows to fit (spAutoFit); start at the text's height
+            height = len(lines) * (size or 18) * 1.2 + 7.2
+        x0, y0, cx, cy = self._box(slide, x, y, width, height)
         n = drawing.max_shape_id(slide) + 1
         paragraphs = []
-        for line in text.split("\n"):
+        for line in lines:
             rpr = a.RPr(lang=lang, sz=int(size * 100) if size else None,
                         b=True if bold else None, dirty=False)
             if color:
@@ -455,17 +509,19 @@ class PresentationDocument(OoxDocument):
             paragraphs.append(para)
         sp = p.Sp(
             p.NvSpPr(p.CNvPr(id=n, name=f"TextBox {n}"), p.CNvSpPr(txBox=True), p.NvPr()),
-            drawing.sp_pr(p, x, y, cx, cy, a.NoFill()),
+            drawing.sp_pr(p, x0, y0, cx, cy, a.NoFill()),
             p.TxBody(a.BodyPr(a.SpAutoFit(), wrap="square", rtlCol=False), a.LstStyle(),
                      *paragraphs),
         )
         self._tree(slide).add(sp)
         return sp
 
-    def add_chart(self, slide: OoxElement, kind: str, categories, series,
-                  x: int = Inches(1), y: int = Inches(1.5), cx: int = Inches(8),
-                  cy: int = Inches(4.5), *, name: str | None = None, **options) -> OoxElement:
-        """Place a chart on a slide; returns its ``p:graphicFrame``.
+    def add_chart(self, slide: OoxElement, kind: str, categories, series, *,
+                  x: float | None = None, y: float | None = None, width: float | None = None,
+                  height: float | None = None, name: str | None = None,
+                  **options) -> OoxElement:
+        """Place a chart on a slide; returns its ``p:graphicFrame``.  Position
+        and size in points (or ``Length``), by default the content area.
 
         ``series`` is ``{"North": [1, 2, 3], ...}`` (or ``oox.charts.Series``
         objects); the data also goes into an embedded workbook ("Edit Data").
@@ -474,20 +530,21 @@ class PresentationDocument(OoxDocument):
         from .charts import CHART_URI, add_embedded_chart
         from .ns import c
 
+        x0, y0, cx, cy = self._box(slide, x, y, width, height)
         rid, _ = add_embedded_chart(self, self.part_of(slide), kind, list(categories), series,
                                     **options)
         n = drawing.max_shape_id(slide) + 1
         frame = p.GraphicFrame(
             p.NvGraphicFramePr(p.CNvPr(id=n, name=name or f"Chart {n}"),
                                p.CNvGraphicFramePr(a.GraphicFrameLocks(noGrp=True)), p.NvPr()),
-            p.Xfrm(a.Off(x=x, y=y), a.Ext(cx=cx, cy=cy)),
+            p.Xfrm(a.Off(x=x0, y=y0), a.Ext(cx=cx, cy=cy)),
             a.Graphic(a.GraphicData(c.Chart(r_id=rid), uri=CHART_URI)),
         )
         self._tree(slide).add(frame)
         return frame
 
-    def charts(self, slide: OoxElement) -> list[dict]:
-        """Charts on a slide, in order: ``oox.charts.chart_info`` plus "rid"."""
+    def charts(self, slide: OoxElement) -> list[Chart]:
+        """A ``Chart`` (``oox.records``) for each chart on the slide, in order."""
         from .charts import charts_in
 
         return charts_in(self, self.part_of(slide), slide)
@@ -497,23 +554,30 @@ class PresentationDocument(OoxDocument):
         found = self.related_parts(self.part_of(slide), "SlideLayoutPart")
         return found[0].element.need("p:cSld").get("name", "") if found else ""
 
-    def add_shape(self, slide: OoxElement, shape: str, x: int, y: int, cx: int, cy: int,
-                  **options) -> OoxElement:
-        """An auto shape with fill, line and text; see ``oox.slides.add_shape``."""
+    def add_shape(self, slide: OoxElement, shape: str, *, x: float | None = None,
+                  y: float | None = None, width: float | None = None,
+                  height: float | None = None, **options) -> OoxElement:
+        """An auto shape with fill, line and text; position and size in points
+        (or ``Length``), by default the content area.  See ``oox.slides.add_shape``."""
         from .slides import add_shape
 
-        return add_shape(self, slide, shape, x, y, cx, cy, **options)
+        return add_shape(self, slide, shape, self._box(slide, x, y, width, height), **options)
 
-    def add_table(self, slide: OoxElement, rows, x: int, y: int, cx: int = Inches(8),
-                  cy: int | None = None, **options) -> OoxElement:
-        """A table in a built-in PowerPoint style; see ``oox.slides.add_table``."""
+    def add_table(self, slide: OoxElement, rows, *, x: float | None = None,
+                  y: float | None = None, width: float | None = None,
+                  height: float | None = None, **options) -> OoxElement:
+        """A table in a built-in PowerPoint style; position and size in points
+        (or ``Length``): by default at the content area's top left, as wide as
+        it, rows of ``row_height``.  See ``oox.slides.add_table``."""
         from .slides import add_table
 
-        return add_table(self, slide, rows, x, y, cx, cy, **options)
+        x0, y0, cx, _ = self._box(slide, x, y, width, 0)
+        cy = None if height is None else emu(height, "height", DRAWING_LIMIT)
+        return add_table(self, slide, rows, (x0, y0, cx, cy), **options)
 
-    def tables(self, slide: OoxElement) -> list[dict]:
-        """``{"name", "rows", "merges", ...}`` for each table on the slide
-        (``deck.table(slide, i)`` edits one)."""
+    def tables(self, slide: OoxElement) -> list[SlideTableInfo]:
+        """A ``SlideTableInfo`` (name, rows, merges, style ...) for each table on the
+        slide (``deck.table(slide, i)`` edits one)."""
         from .slides import tables
 
         return tables(self, slide)
@@ -545,8 +609,8 @@ class PresentationDocument(OoxDocument):
 
         return set_link(self, slide, shape, target, text=text, tooltip=tooltip)
 
-    def links(self, slide: OoxElement) -> list[dict]:
-        """The slide's click links; see ``oox.slidelinks.links``."""
+    def links(self, slide: OoxElement) -> list[Hyperlink]:
+        """A ``Hyperlink`` for each click link on the slide; see ``oox.slidelinks.links``."""
         from .slidelinks import links
 
         return links(self, slide)
@@ -570,19 +634,26 @@ class PresentationDocument(OoxDocument):
 
         return set_placeholder_picture(self, slide, which, image, crop=crop, descr=descr)
 
-    def shapes(self, slide: OoxElement) -> list[dict]:
-        """What a slide holds; see ``oox.slides.shapes``."""
+    def shapes(self, slide: OoxElement) -> list[Shape]:
+        """A ``Shape`` for each thing on the slide, with position and size in points;
+        see ``oox.slides.shapes``."""
         from .slides import shapes
 
         return shapes(self, slide)
 
-    def add_picture(self, slide: OoxElement, image, x: int = Inches(1), y: int = Inches(1), *,
-                    width: int | None = None, height: int | None = None,
-                    descr: str = "", fallback=None) -> OoxElement:
-        """Place a picture on a slide.  Size in EMU; one dimension keeps the
-        aspect ratio.  An SVG needs ``fallback=`` (a PNG) for Office before 2016."""
+    def add_picture(self, slide: OoxElement, image, *, x: float | None = None,
+                    y: float | None = None, width: float | None = None,
+                    height: float | None = None, descr: str = "",
+                    fallback=None) -> OoxElement:
+        """Place a picture on a slide.  Position and size in points (or
+        ``Length``); by default at the content area's top left, at the image's
+        natural size; one dimension keeps the aspect ratio.  An SVG needs
+        ``fallback=`` (a PNG) for Office before 2016."""
+        from .document import picture_size
+
+        x, y, _, _ = self._box(slide, x, y, 0, 0)
         rid, info, svg_rid = self.add_picture_image(image, fallback, self.part_of(slide))
-        cx, cy = info.scaled(width, height)
+        cx, cy = picture_size(info, width, height)
         n = drawing.max_shape_id(slide) + 1
         pic = drawing.picture(p, n, f"Picture {n}", rid, cx, cy, x, y, descr=descr, nv_pr=True,
                               svg_rid=svg_rid)

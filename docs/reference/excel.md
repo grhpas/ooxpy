@@ -49,6 +49,24 @@ sheet(name: str) -> OoxElement
 
 Root `<x:worksheet>` of the named sheet.
 
+#### `shared_strings_part`
+
+*read-only property*
+
+The shared strings part (`xl/sharedStrings.xml`), or None.
+
+#### `styles_part`
+
+*read-only property*
+
+The workbook styles part (`xl/styles.xml`), or None.
+
+#### `theme_part`
+
+*read-only property*
+
+The theme part (`xl/theme/theme1.xml`), or None.
+
 #### `sheet_names`
 
 *read-only property*
@@ -219,11 +237,11 @@ Apply a style to every cell in a range (empty cells are created).
 #### `cell_format`
 
 ```python
-cell_format(sheet: str | OoxElement, ref: str) -> dict
+cell_format(sheet: str | OoxElement, ref: str) -> CellFormat
 ```
 
-The cell's formatting as `cell_style` options (number_format,
-bold, font, fill, border, align ...).
+The cell's formatting as a `CellFormat` with `cell_style`'s options
+(number_format, bold, font, fill, border, align ...).
 
 ### Layout
 
@@ -307,10 +325,10 @@ merged_cells(sheet: str) -> list[str]
 
 The sheet's merged ranges, in document order.
 
-#### `freeze_panes`
+#### `set_frozen_panes`
 
 ```python
-freeze_panes(sheet: str, ref: str | None) -> None
+set_frozen_panes(sheet: str, ref: str | None) -> None
 ```
 
 Freeze the rows above and columns left of `ref` ("B2"); None unfreezes.
@@ -383,11 +401,10 @@ or a whole/decimal number between two bounds.
 #### `validations`
 
 ```python
-validations(sheet: str) -> list[dict]
+validations(sheet: str) -> list[Validation]
 ```
 
-`{"range", "type", ...}` per data-validation rule (lists add `values`, bounds
-add `operator` and `formulas`).
+A `Validation` per data-validation rule, with `add_validation`'s options.
 
 ### Conditional formatting
 
@@ -413,7 +430,7 @@ book.conditional_format("Sheet1", "A2:A20", "duplicates", style={"fill": "FFEB9C
 book.conditional_format("Sheet1", "A2:A20", "text", text="North", style={"bold": True})
 book.conditional_format("Sheet1", "A2:E20", "formula", formula="$E2>$D2",
                         style={"fill": "C6EFCE"})
-book.conditional_formats("Sheet1")   # [{"range": "B2:B20", "type": "cellIs", ...}, ...]
+book.conditional_formats("Sheet1")   # [ConditionalFormat(ref="B2:B20", rule="cell", ...)]
 ```
 
 Rules: `cell` (operator `>`, `>=`, `<`, `<=`, `=`, `!=`, `between`,
@@ -427,12 +444,11 @@ Formulas are written relative to the range's top-left cell, as Excel does.
 #### `conditional_formats`
 
 ```python
-conditional_formats(sheet: str) -> list[dict]
+conditional_formats(sheet: str) -> list[ConditionalFormat]
 ```
 
-`{"range", "type", "priority", ...}` per rule, in priority order, with
-`operator`, `formulas`, `style`, `colors`, `icons`, `rank` or `text`
-where they apply.
+A `ConditionalFormat` per rule, in priority order, with
+`conditional_format`'s options where they apply.
 
 ### Tables
 
@@ -476,10 +492,10 @@ max, stddev, var) a `SUBTOTAL` formula, whose result oox computes and caches.
 #### `tables`
 
 ```python
-tables(sheet: str) -> list[dict]
+tables(sheet: str) -> list[ExcelTable]
 ```
 
-`{"name", "ref", "columns", "style", "totals", "header"}` for each table on the
+An `ExcelTable` (name, ref, columns, style, switches) for each table on the
 sheet.
 
 ### Comments and hyperlinks
@@ -502,10 +518,10 @@ A cell comment (note); replaces an existing one on that cell.
 #### `comments`
 
 ```python
-comments(sheet: str) -> dict[str, tuple[str, str]]
+comments(sheet: str) -> dict[str, Comment]
 ```
 
-`{ref: (author, text)}` for the sheet's comments; the "Author:" line Excel puts
+`{ref: Comment}` for the sheet's comments; the "Author:" line Excel puts
 first is removed.
 
 #### `add_hyperlink`
@@ -527,22 +543,23 @@ A link in a cell: a URL, or "#Sheet!A1" / "#Name" inside the workbook.
 #### `hyperlinks`
 
 ```python
-hyperlinks(sheet: str) -> dict[str, str]
+hyperlinks(sheet: str) -> dict[str, Hyperlink]
 ```
 
-`{ref: target}`: a URL, or `#Sheet!A1` for a link inside the workbook.
+`{ref: Hyperlink}`: `target` a URL, or `#Sheet!A1` for a link inside
+the workbook.
 
 ### Printing and sheet options
 
-#### `page_setup`
+#### `set_page_setup`
 
 ```python
-page_setup(sheet: str, **options) -> None
+set_page_setup(sheet: str, **options) -> None
 ```
 
 Orientation, paper, fit to pages, scale, margins, print area,
 repeated rows/columns, header and footer, gridlines, centring; see
-`oox.xlprint.page_setup`.
+`oox.xlprint.set_page_setup`.
 
 **Options** (keywords)
 
@@ -563,20 +580,19 @@ center_horizontally: bool | None = None
 center_vertically: bool | None = None
 ```
 
-#### `page_setup_info`
+#### `page_setup`
 
 ```python
-page_setup_info(sheet: str) -> dict
+page_setup(sheet: str) -> PageSetup
 ```
 
-`{"orientation", "paper", "margins", ...}`: the sheet's print setup, with
-`fit`, `scale`, `print_area`, `repeat_rows`, `header`/`footer` where
-set.
+The sheet's print setup as a `PageSetup` (`set_page_setup`'s options;
+None where the sheet doesn't say; margins in points).
 
-#### `sheet_options`
+#### `set_sheet_options`
 
 ```python
-sheet_options(sheet: str, **options) -> None
+set_sheet_options(sheet: str, **options) -> None
 ```
 
 tab_color, hidden (True/False/"very"), zoom, gridlines.
@@ -594,13 +610,13 @@ gridlines: bool | None = None
 hidden from Excel's Unhide list too), `zoom` (percent), `gridlines`
 (shown on screen).
 
-#### `sheet_options_info`
+#### `sheet_options`
 
 ```python
-sheet_options_info(sheet: str) -> dict
+sheet_options(sheet: str) -> SheetOptions
 ```
 
-`{"tab_color", "hidden", "protected", "zoom", "gridlines"}` for the sheet.
+The sheet's `SheetOptions` (tab_color, hidden, zoom, gridlines, protected).
 
 ### Protection
 
@@ -648,12 +664,12 @@ Review > Protect Workbook.
 
 ```python
 doc.protect("readOnly", password="secret")    # or comments, trackedChanges, forms
-doc.protection()       # {"edit": "readOnly", "enforced": True, "password": True, ...}
+doc.protection()       # Protection(edit="readOnly", enforced=True, password=True, ...)
 doc.check_protection_password("secret")        # True
 doc.unprotect()
 
 book.protect_workbook(password="secret")       # lock the structure (sheets)
-book.workbook_protection()                     # {"structure": True, ...}
+book.workbook_protection()                     # WorkbookProtection(structure=True, ...)
 ```
 
 Word's password hash (ECMA-376 Part 1 §17.15.1.29, Part 4 §14.8.1): the
@@ -671,10 +687,10 @@ readable in the file.
 #### `workbook_protection`
 
 ```python
-workbook_protection() -> dict | None
+workbook_protection() -> WorkbookProtection | None
 ```
 
-`{"structure", "windows", "password"}` (booleans), or None.
+The workbook's `WorkbookProtection` (structure, windows, password), or None.
 
 #### `check_workbook_password`
 
@@ -703,8 +719,8 @@ add_picture(
     image,
     anchor: str = 'A1',
     *,
-    width: int | None = None,
-    height: int | None = None,
+    width: float | None = None,
+    height: float | None = None,
     descr: str = '',
     fallback=None,
 ) -> OoxElement
@@ -712,7 +728,7 @@ add_picture(
 
 Float a picture over the sheet with its top-left corner at `anchor`.
 
-Size in EMU (`oox.units`); one dimension keeps the aspect ratio.  An
+Size in points (or `Length`); one dimension keeps the aspect ratio.  An
 SVG needs `fallback=` (a PNG) for Office before 2016.
 
 #### `add_chart`
@@ -728,8 +744,8 @@ categories); see `oox.xlcharts.add_chart`.
 
 ```python
 anchor: str = 'E2'
-width: int = 5400000
-height: int = 2700000
+width: float = 5400000
+height: float = 2700000
 series_in: str = 'columns'
 name: str | None = None
 ```
@@ -768,11 +784,11 @@ Root `<x:chartsheet>` of the named chart sheet.
 #### `charts`
 
 ```python
-charts(sheet: str) -> list[dict]
+charts(sheet: str) -> list[Chart]
 ```
 
-Charts on a worksheet or chart sheet, in drawing order: `chart_info` plus
-"anchor" (the top-left cell; None on a chart sheet) and "name".
+A `Chart` for each chart on a worksheet or chart sheet, in drawing order,
+with its `anchor` (top-left cell; None on a chart sheet) and `name`.
 
 ## `Formula`
 

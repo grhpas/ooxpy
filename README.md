@@ -36,8 +36,9 @@ book.save("sales.xlsx")
 
 deck = PresentationDocument.new()                      # master, layout and theme included
 slide = deck.add_slide()
-deck.add_textbox(slide, Inches(1), Inches(0.5), Inches(11), Inches(1), "Regional sales", size=40)
-deck.add_picture(slide, "chart.png", Inches(1), Inches(2), width=Inches(6))
+deck.add_text_box(slide, "Regional sales", x=Inches(1), y=Inches(0.5), width=Inches(11),
+                  height=Inches(1), size=40)
+deck.add_picture(slide, "chart.png", x=Inches(1), y=Inches(2), width=Inches(6))
 deck.save("sales.pptx")
 ```
 
@@ -61,7 +62,7 @@ python -m oox downgrade from-libreoffice.xlsx for-2007.xlsx
 
 **Coming from odfpy?** The same method names work (`addElement`, `childNodes`,
 `getElementsByType`, `teletype`, `load`, `save(name, True)`). See
-[docs/odfpy.md](docs/odfpy.md).
+[docs/odfpy.md](https://github.com/grhpas/ooxpy/blob/main/docs/odfpy.md).
 
 ## Install
 
@@ -73,7 +74,7 @@ Python 3.10 or newer; the only dependency is [lxml](https://lxml.de/).
 
 ## Documentation
 
-The documentation lives in [`docs/`](docs/index.md): getting started, concepts, guides
+The documentation lives in [`docs/`](https://github.com/grhpas/ooxpy/blob/main/docs/index.md): getting started, concepts, guides
 for Word, Excel, PowerPoint and charts, a cookbook, the command line, migrating from
 odfpy, Office compatibility and the API reference. Every code example in it runs in the
 test suite. To read it as a site:
@@ -83,13 +84,13 @@ pip install ".[docs]"
 mkdocs serve
 ```
 
-The [`examples/`](examples/) folder has ten runnable scripts, each with a short HTML
+The [`examples/`](https://github.com/grhpas/ooxpy/tree/main/examples/) folder has ten runnable scripts, each with a short HTML
 tutorial next to it (`examples/index.html`).
 
 **Status:** 0.5.0, the first public release (alpha): the API may still change before
-1.0 ([docs/STABILITY.md](docs/STABILITY.md)); changes are listed in
-[CHANGELOG.md](CHANGELOG.md). The design and decision record is
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), the plan [docs/ROADMAP.md](docs/ROADMAP.md).
+1.0 ([docs/STABILITY.md](https://github.com/grhpas/ooxpy/blob/main/docs/STABILITY.md)); changes are listed in
+[CHANGELOG.md](https://github.com/grhpas/ooxpy/blob/main/CHANGELOG.md). The design and decision record is
+[docs/ARCHITECTURE.md](https://github.com/grhpas/ooxpy/blob/main/docs/ARCHITECTURE.md), the plan [docs/ROADMAP.md](https://github.com/grhpas/ooxpy/blob/main/docs/ROADMAP.md).
 
 ## Development
 
@@ -108,4 +109,4 @@ OOX_SDK_DATA=../sdk/data pytest      # also checks committed code == regenerated
 
 Generated code in `src/oox/_generated` and `src/oox/ns` comes from Open XML SDK
 data (© .NET Foundation and Contributors, MIT). Every source, library and
-specification we use is credited in [docs/ATTRIBUTIONS.md](docs/ATTRIBUTIONS.md).
+specification we use is credited in [docs/ATTRIBUTIONS.md](https://github.com/grhpas/ooxpy/blob/main/docs/ATTRIBUTIONS.md).

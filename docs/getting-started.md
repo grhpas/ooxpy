@@ -74,7 +74,7 @@ deck.set_placeholder_text(plan, "title", "Plan")
 deck.set_placeholder_text(plan, "body", ["Research", (1, "12 interviews"), "Prototype"])
 deck.set_notes(plan, "The pilot moved two weeks.")
 
-deck.add_picture(plan, "logo.png", Inches(11), Inches(0.3), width=Inches(1.5))
+deck.add_picture(plan, "logo.png", x=Inches(11), y=Inches(0.3), width=Inches(1.5))
 deck.save("falcon.pptx")
 ```
 

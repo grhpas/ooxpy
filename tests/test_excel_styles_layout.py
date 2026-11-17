@@ -55,10 +55,10 @@ def test_styles_are_shared_and_described():
     book.set_value("Sheet1", "B1", 1.5, style=b)
     back = reopen(book)
     fa, fb = back.cell_format("Sheet1", "A1"), back.cell_format("Sheet1", "B1")
-    assert (fa["bold"], fa["fill"], fa["border"], fa["align"]) == (True, "D9E2F3", "thin", "center")
-    assert (fb["number_format"], fb["font"], fb["size"], fb["color"]) == \
+    assert (fa.bold, fa.fill, fa.border, fa.align) == (True, "D9E2F3", "thin", "center")
+    assert (fb.number_format, fb.font, fb.size, fb.color) == \
         ("#,##0.00", "Arial", 12.0, "1F3864")
-    assert fb["border"] == {"bottom": "double"}
+    assert fb.border == {"bottom": "double"}
     assert back.display_text("Sheet1", "B1") == "1.50"
     assert not book.validate(target="Office2007")
 
@@ -104,9 +104,9 @@ def test_style_range_and_kept_styles():
     book = SpreadsheetDocument.new()
     book.set_value("Sheet1", "B2", 5)
     book.style_range("Sheet1", "A1:C2", bold=True)
-    assert all(book.cell_format("Sheet1", r)["bold"] for r in ("A1", "C1", "B2", "C2"))
+    assert all(book.cell_format("Sheet1", r).bold for r in ("A1", "C1", "B2", "C2"))
     book.set_value("Sheet1", "B2", 6)  # style kept when not given
-    assert book.cell_format("Sheet1", "B2")["bold"]
+    assert book.cell_format("Sheet1", "B2").bold
     assert book.value("Sheet1", "B2") == 6
 
 
@@ -150,7 +150,7 @@ def test_rows_merges_freeze_filter_names_validation():
     book.merge_cells("Sales", "A6:C6")
     with pytest.raises(ValueError):
         book.merge_cells("Sales", "B6:D7")
-    book.freeze_panes("Sales", "B2")
+    book.set_frozen_panes("Sales", "B2")
     book.auto_filter("Sales", "A1:B4")
     with pytest.raises(ValueError):
         book.define_name("Q1", "Sales", "B2:B4")  # "Q1" is a cell reference, as Excel says
@@ -166,11 +166,14 @@ def test_rows_merges_freeze_filter_names_validation():
     assert back.defined_names() == {"Sales!_xlnm._FilterDatabase": "Sales!$A$1:$B$4",
                                     "FirstQuarter": "Sales!$B$2:$B$4",
                                     "Sales!Local": "Sales!$A$1"}
-    assert back.validations("Sales") == [
-        {"range": "C2:C4", "type": "list", "values": ["Yes", "No"]},
-        {"range": "D2", "type": "whole", "min": "1", "max": "10"}]
+    lists, numbers = back.validations("Sales")
+    assert (lists.ref, lists.type, lists.values) == ("C2:C4", "list", ["Yes", "No"])
+    assert (numbers.ref, numbers.whole, numbers.error) == ("D2", (1, 10), "1 to 10")
+    again = SpreadsheetDocument.new("Sales")       # read back, written again
+    again.add_validation("Sales", numbers.ref, whole=numbers.whole, error=numbers.error)
+    assert again.validations("Sales")[0] == numbers
     assert not book.validate(target="Office2007")
-    book.freeze_panes("Sales", None)
+    book.set_frozen_panes("Sales", None)
     book.auto_filter("Sales", None)
     book.unmerge_cells("Sales", "A6:C6")
     assert (book.frozen_panes("Sales"), book.auto_filter_range("Sales"),

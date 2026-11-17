@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any
 from .element import OoxElement
 from .grammar import URI
 from .ns import a
+from .units import DRAWING_LIMIT, emu, points
 
 if TYPE_CHECKING:
     from .presentation import PresentationDocument
@@ -72,17 +73,17 @@ class SlideTable:
         return len(self._grid_cols())
 
     @property
-    def widths(self) -> list[int]:
-        """Column widths in EMU."""
-        return [int(g.get("w", "0")) for g in self._grid_cols()]
+    def widths(self) -> list[float]:
+        """Column widths in points."""
+        return [points(int(g.get("w", "0"))) for g in self._grid_cols()]
 
-    def set_widths(self, widths: list[int]) -> None:
-        """Column widths in EMU; the frame's width follows."""
+    def set_widths(self, widths: list[float]) -> None:
+        """Column widths in points (or ``Length``); the frame's width follows."""
         cols = self._grid_cols()
         if len(widths) != len(cols):
             raise ValueError(f"{len(widths)} widths for {len(cols)} columns")
         for g, wd in zip(cols, widths, strict=True):
-            g.set("w", str(int(wd)))
+            g.set("w", str(emu(wd, "widths", DRAWING_LIMIT)))
         self._fit_frame()
 
     def _tc(self, row: int, col: int) -> OoxElement:
@@ -207,10 +208,10 @@ class SlideTable:
 
     # -- columns ----------------------------------------------------------------------
     def add_column(self, values: list[Any] | None = None, *, index: int | None = None,
-                   width: int | None = None, like: int | None = None) -> None:
+                   width: float | None = None, like: int | None = None) -> None:
         """Insert a column before ``index`` (default: at the end), formatted
-        like column ``like`` (default: the one left of it); ``width`` in EMU
-        (default: that column's).  The frame grows by the width."""
+        like column ``like`` (default: the one left of it); ``width`` in points
+        or ``Length`` (default: that column's).  The frame grows by the width."""
         cols = self._grid_cols()
         index = len(cols) if index is None else index
         if not 0 <= index <= len(cols):
@@ -221,7 +222,8 @@ class SlideTable:
                 if _on(list(tr.iterchildren(f"{{{A}}}tc"))[index], "hMerge"):
                     raise ValueError(f"column {index} is inside a merge in row {r}; unmerge first")
         like = (index - 1 if index > 0 else 0) if like is None else like
-        new_col = a.GridCol(w=width if width is not None else int(cols[like].get("w", "0")))
+        new_col = a.GridCol(w=emu(width, "width", DRAWING_LIMIT) if width is not None
+                            else int(cols[like].get("w", "0")))
         if index < len(cols):
             cols[index].addprevious(new_col)
         else:
@@ -347,7 +349,7 @@ class SlideTable:
         ext = self.frame.find(f"{{{URI['p']}}}xfrm/{{{A}}}ext")
         if ext is None:
             return
-        ext.set("cx", str(sum(self.widths)))
+        ext.set("cx", str(sum(int(g.get("w", "0")) for g in self._grid_cols())))
         ext.set("cy", str(sum(int(tr.get("h", "0")) for tr in self.rows)))
 
 

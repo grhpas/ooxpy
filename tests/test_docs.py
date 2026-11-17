@@ -25,7 +25,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs"
 RUN = ["index.md", "getting-started.md", "concepts.md", "guide/word.md", "guide/excel.md",
-       "guide/powerpoint.md", "guide/charts.md", "guide/existing-files.md",
+       "guide/powerpoint.md", "guide/charts.md", "guide/existing-files.md", "guide/reading.md",
        "guide/validation.md", "cookbook.md", "odfpy.md", "faq.md"]
 BLOCK = re.compile(r"(<!-- no-run -->\s*\n)?```python[^\n]*\n(.*?)\n```", re.S)
 
@@ -94,3 +94,11 @@ def test_site_builds_strict(tmp_path):
                          text=True, env=env, check=False)
     assert run.returncode == 0, run.stdout + run.stderr
     assert (tmp_path / "site" / "guide" / "word" / "index.html").is_file()
+
+
+def test_readme_links_are_absolute():
+    """PyPI shows the README without the repository around it: relative links break."""
+    text = (ROOT / "README.md").read_text(encoding="utf-8")
+    links = re.findall(r"\]\(([^)]+)\)|(?:src|href)=\"([^\"]+)\"", text)
+    relative = [a or b for a, b in links if not re.match(r"https?://|mailto:|#", a or b)]
+    assert relative == []

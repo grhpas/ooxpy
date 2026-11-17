@@ -62,11 +62,12 @@ steps.add("by region", level=1)
 steps.add("Write the summary")
 again = steps.restart()                    # same format, starts again at 1
 again.add("New list")
-print([label for _, label in report.list_labels()])
+print([item.label for item in report.list_labels()])
 report.save("report.docx")</code></pre>
 <pre class="out">['1.', 'a.', '2.', '1.']</pre>
 <p><code>list_labels()</code> also works on documents from Word or LibreOffice: it computes the
-number Word displays for each list paragraph.</p>
+number Word displays for each list paragraph. Each item also carries the paragraph, its
+level, the list's ids, the number format and the label's font.</p>
 
 <p><code>WordprocessingDocument.new(minimal=True)</code> gives the smallest valid package
 instead, with no styles; Word fills in its own defaults.</p>

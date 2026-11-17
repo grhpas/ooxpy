@@ -92,7 +92,7 @@ def add_table(book: SpreadsheetDocument, sheet: str, ref: str, *, name: str | No
     c1, r1, c2, r2 = parse_range(ref)
     if r2 <= r1:
         raise ValueError("a table needs a header row and at least one data row")
-    existing = [t["ref"] for t in tables(book, sheet)]
+    existing = [t.ref for t in tables(book, sheet)]
     af = auto_filter_range(book.sheet(sheet))
     for other in existing + merged_cells(book.sheet(sheet)) + ([af] if af else []):
         d1, s1, d2, s2 = parse_range(other)
@@ -168,17 +168,24 @@ def _escape(column: str) -> str:
     return re.sub(r"(['\[\]#])", r"'\1", column)
 
 
-def tables(book: SpreadsheetDocument, sheet: str) -> list[dict[str, Any]]:
+def tables(book: SpreadsheetDocument, sheet: str) -> list:
+    """An ``ExcelTable`` for each table on the sheet."""
+    from .records import ExcelTable
+
     out = []
     for _, t in _sheet_tables(book, sheet):
         cols = t.first("x:tableColumns")
         info = t.first("x:tableStyleInfo")
-        out.append({
-            "name": t.get("name"), "ref": t.get("ref"),
-            "columns": [c.get("name") for c in cols.iterchildren(f"{{{X}}}tableColumn")]
+        def shown(attr: str, default: str = "0", info=info) -> bool:
+            return (info.get(attr, default) if info is not None else default) in ("1", "true")
+
+        out.append(ExcelTable(
+            name=t.get("name"), ref=t.get("ref"),
+            columns=[c.get("name") for c in cols.iterchildren(f"{{{X}}}tableColumn")]
             if cols is not None else [],
-            "style": info.get("name") if info is not None else None,
-            "totals": int(t.get("totalsRowCount", "0")) > 0,
-            "header": t.get("headerRowCount", "1") != "0",
-        })
+            style=info.get("name") if info is not None else None,
+            stripes=shown("showRowStripes", "1"), first_column=shown("showFirstColumn"),
+            last_column=shown("showLastColumn"),
+            header=t.get("headerRowCount", "1") != "0",
+            totals_row=int(t.get("totalsRowCount", "0")) > 0))
     return out

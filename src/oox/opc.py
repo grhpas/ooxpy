@@ -21,7 +21,8 @@ import os
 import posixpath
 import zipfile
 import zlib
-from dataclasses import dataclass, field
+from collections.abc import MutableMapping
+from dataclasses import dataclass
 from typing import IO
 
 from lxml import etree  # pyright: ignore[reportAttributeAccessIssue]
@@ -97,29 +98,53 @@ class Relationship:
     external: bool = False
 
 
-@dataclass
-class Relationships:
-    items: dict[str, Relationship] = field(default_factory=dict)
-    _original: tuple[bytes, dict] | None = field(default=None, repr=False, compare=False)
-    _original_strict: bool = field(default=False, repr=False, compare=False)
+class Relationships(MutableMapping):
+    """A part's relationships: a mapping of relationship id to ``Relationship``
+    (``rels["rId1"]``, ``rels.get(rid)``, ``rels.items()``, ``len(rels)``)."""
+
+    def __init__(self, items: dict[str, Relationship] | None = None) -> None:
+        self._items: dict[str, Relationship] = dict(items or {})
+        self._original: tuple[bytes, dict] | None = None
+        self._original_strict = False
+
+    def __getitem__(self, rid: str) -> Relationship:
+        return self._items[rid]
+
+    def __setitem__(self, rid: str, rel: Relationship) -> None:
+        if not isinstance(rel, Relationship) or rel.rid != rid:
+            raise ValueError("set a Relationship whose rid is the key")
+        self._items[rid] = rel
+
+    def __delitem__(self, rid: str) -> None:
+        del self._items[rid]
+
+    def __iter__(self):
+        return iter(self._items)
+
+    def __len__(self) -> int:
+        return len(self._items)
+
+    def __repr__(self) -> str:
+        return f"Relationships({list(self._items.values())!r})"
 
     def add(self, reltype: str, target: str, external: bool = False) -> str:
-        n = len(self.items) + 1
-        while f"rId{n}" in self.items:
+        """Add a relationship; returns its new id ("rId3")."""
+        n = len(self._items) + 1
+        while f"rId{n}" in self._items:
             n += 1
         rid = f"rId{n}"
-        self.items[rid] = Relationship(rid, reltype, target, external)
+        self._items[rid] = Relationship(rid, reltype, target, external)
         return rid
 
     def of_type(self, reltype: str) -> list[Relationship]:
-        return [r for r in self.items.values() if r.reltype == reltype]
+        return [r for r in self._items.values() if r.reltype == reltype]
 
     def to_bytes(self, strict: bool = False) -> bytes:
-        if (self._original is not None and self._original[1] == self.items
+        if (self._original is not None and self._original[1] == self._items
                 and self._original_strict == strict):
             return self._original[0]  # unchanged since load -> byte-identical
         root = etree.Element(f"{{{PR_NS}}}Relationships", nsmap={None: PR_NS})
-        for r in self.items.values():
+        for r in self._items.values():
             rtype = _strict.reltype_to_strict(r.reltype) if strict else r.reltype
             e = etree.SubElement(root, f"{{{PR_NS}}}Relationship",
                                  Id=r.rid, Type=rtype, Target=r.target)
@@ -138,12 +163,12 @@ class Relationships:
             rid, rtype, target = e.get("Id"), e.get("Type"), e.get("Target")
             if not (rid and rtype and target is not None):
                 raise PackageError(f"relationship without Id/Type/Target: {dict(e.attrib)}")
-            if rid in rels.items:
+            if rid in rels._items:
                 raise PackageError(f"duplicate relationship id {rid}")
             if strict:
                 rtype = _strict.reltype_to_transitional(rtype)
-            rels.items[rid] = Relationship(rid, rtype, target, e.get("TargetMode") == "External")
-        rels._original = (data, {k: Relationship(**vars(v)) for k, v in rels.items.items()})
+            rels._items[rid] = Relationship(rid, rtype, target, e.get("TargetMode") == "External")
+        rels._original = (data, {k: Relationship(**vars(v)) for k, v in rels._items.items()})
         rels._original_strict = strict
         return rels
 
@@ -160,6 +185,8 @@ class Part:
         self._blob_strict = False  # blob uses Strict namespaces (set by Package.open)
         self._strict_percent: set[tuple[str, str]] = set()  # percentages converted on read
         self.rels = Relationships()
+        #: the package holding the part (set when it is added or read)
+        self.package: Package | None = None
 
     @property
     def is_xml(self) -> bool:
@@ -187,6 +214,25 @@ class Part:
         """Name of the part's relationships part ("/word/_rels/document.xml.rels")."""
         d, f = posixpath.split(self.partname)
         return posixpath.join(d, "_rels", f + ".rels")
+
+    @property
+    def blob(self) -> bytes:
+        """The part's bytes, as they would be saved."""
+        strict = self.package is not None and self.package.conformance == "strict"
+        return self.to_bytes(strict=strict)
+
+    def related_part(self, rid: str) -> Part:
+        """The part that relationship ``rid`` of this part points to.  Raises
+        ``KeyError`` for an unknown id and ``PackageError`` for an external
+        link or a missing target."""
+        rel = self.rels[rid]
+        if rel.external:
+            raise PackageError(f"{rid} of {self.partname} is an external link to {rel.target}")
+        name = self.resolve(rel.target)
+        part = self.package.parts.get(name) if self.package is not None else None
+        if part is None:
+            raise PackageError(f"{rid} of {self.partname} points to {name}, which is missing")
+        return part
 
     def resolve(self, target: str) -> str:
         """The part name a relationship ``target`` points to, relative to this part."""
@@ -242,6 +288,7 @@ class Package:
         self.root = _PackageRoot()
         self.defaults: dict[str, str] = {"rels": CT_RELS, "xml": "application/xml"}
         self._ct_original: tuple[bytes, dict, dict] | None = None
+        self._by_root: dict[etree._Element, Part] = {}
         #: "transitional" or "strict" -- how the package is written.  Opening
         #: a Strict file sets "strict"; trees are always Transitional in memory.
         self.conformance = "transitional"
@@ -254,7 +301,19 @@ class Package:
         if partname in self.parts:
             raise PackageError(f"duplicate part {partname}")
         part = Part(partname, content_type, element=element, blob=blob)
+        part.package = self
         self.parts[partname] = part
+        return part
+
+    def part_of(self, element: etree._Element) -> Part:
+        """The part whose XML tree contains ``element``."""
+        root = element.getroottree().getroot()
+        part = self._by_root.get(root)
+        if part is None or part._element is not root or self.parts.get(part.partname) is not part:
+            self._by_root = {p._element: p for p in self.parts.values() if p._element is not None}
+            part = self._by_root.get(root)
+        if part is None:
+            raise PackageError("element is not attached to a part of this document")
         return part
 
     def relate(self, source: Part | None, target: Part, reltype: str) -> str:
@@ -343,7 +402,8 @@ class Package:
                 continue
             ext = pn.rpartition(".")[2].lower()
             ctype = overrides.get(pn) or pkg.defaults.get(ext, "application/octet-stream")
-            pkg.parts[pn] = Part(pn, ctype, blob=read(info))
+            part = pkg.parts[pn] = Part(pn, ctype, blob=read(info))
+            part.package = pkg
         if "/_rels/.rels" in by_name:
             root_rels = read(by_name["/_rels/.rels"])
             strict = any(_strict.is_strict_reltype(e.get("Type") or "")
@@ -401,12 +461,12 @@ class Package:
         strict = self.conformance == "strict"
         with zipfile.ZipFile(file, "w") as z:
             write(z, "[Content_Types].xml", self._content_types())  # first, by convention
-            if self.root.rels.items:
+            if self.root.rels:
                 write(z, self.root.rels_name, self.root.rels.to_bytes(strict))
             for pn in sorted(self.parts):
                 part = self.parts[pn]
                 write(z, pn, part.to_bytes(strict))
-                if part.rels.items:
+                if part.rels:
                     write(z, part.rels_name, part.rels.to_bytes(strict))
 
 

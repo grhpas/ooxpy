@@ -33,7 +33,7 @@ deck.set_placeholder_text(plan, "title", "Plan")
 deck.set_placeholder_text(plan, 1, ["Research", (1, "12 interviews"), "Prototype"])
 deck.set_placeholder_text(plan, 2, "Build\nPilot in North\nLaunch")
 
-print([(kind, idx) for kind, idx, _ in deck.placeholders(plan)])
+print([(ph.type, ph.idx) for ph in deck.placeholders(plan)])
 ```
 
 `add_slide(layout)` copies the layout's placeholders onto the slide, empty and
@@ -49,18 +49,24 @@ steps = deck.add_slide("Title Only")
 deck.set_placeholder_text(steps, "title", "Next steps")
 for i, (label, fill) in enumerate([("Pilot", "4472C4"), ("Review", "5B9BD5"),
                                    ("Launch", "70AD47")]):
-    deck.add_shape(steps, "chevron" if i else "homePlate", Inches(1 + i * 3.6), Inches(3),
-                   Inches(3.4), Inches(1.2), text=label, fill=fill, size=20)
-deck.add_textbox(steps, Inches(1), Inches(5), Inches(10), Inches(0.8),
-                 "Dates are provisional.", size=14, color="595959")
-deck.add_picture(steps, "logo.png", Inches(11.5), Inches(0.3), width=Inches(1.2))
+    deck.add_shape(steps, "chevron" if i else "homePlate", x=Inches(1 + i * 3.6), y=Inches(3),
+                   width=Inches(3.4), height=Inches(1.2), text=label, fill=fill, size=20)
+deck.add_text_box(steps, "Dates are provisional.", x=Inches(1), y=Inches(5), width=Inches(10),
+                  height=Inches(0.8), size=14, color="595959")
+deck.add_picture(steps, "logo.png", x=Inches(11.5), y=Inches(0.3), width=Inches(1.2))
 
-print([(s["kind"], s["text"]) for s in deck.shapes(steps)][:3])
+print([(s.kind, s.text) for s in deck.shapes(steps)][:3])
 ```
+
+Positions and sizes are keywords: `x`, `y`, `width` and `height`, in points or a length
+from `oox.units`. Leave them out and the shape, table, chart or picture goes in the
+slide's content area (`deck.content_area(slide)`, where "Title and Content" puts its
+text): `deck.add_table(slide, rows)` is enough for a table under the title.
 
 Shapes use PowerPoint's preset geometries (`rect`, `roundRect`, `ellipse`, `rightArrow`,
 `chevron` …) with fill, line and centred text. `shapes(slide)` describes everything on
-a slide: placeholders, text boxes, shapes, pictures, tables, charts and groups.
+a slide as `Shape` records: placeholders, text boxes, shapes, pictures, tables, charts
+and groups, with their position and size in points.
 
 A picture placeholder (on the "Picture with Caption" layout, say) is filled the way
 PowerPoint fills it, cropped to the placeholder:
@@ -80,7 +86,7 @@ deck.add_table(results, [["Region", "Q1", "Q2", "Q3"],
                          ["North", 120, 135, 150],
                          ["South", 95, 110, 99],
                          ["Total", None, None, 384]],
-               Inches(1), Inches(1.8), Inches(8), merges=["A4:C4"],
+               x=Inches(1), y=Inches(1.8), width=Inches(8), merges=["A4:C4"],
                style="Medium Style 2 - Accent 1")
 ```
 
@@ -114,11 +120,11 @@ The notes master is created on first use (or an existing one is reused).
 ## Links
 
 ```python
-deck.set_link(steps, deck.shapes(steps)[-2]["name"], "https://example.org/plan",
+deck.set_link(steps, deck.shapes(steps)[-2].name, "https://example.org/plan",
               tooltip="The full plan")
-deck.set_link(cover, deck.shapes(cover)[0]["name"], plan)    # jump to a slide
-deck.set_link(results, deck.shapes(results)[0]["name"], "next")
-print([link["kind"] for link in deck.links(steps)])         # ['url']
+deck.set_link(cover, deck.shapes(cover)[0].name, plan)    # jump to a slide
+deck.set_link(results, deck.shapes(results)[0].name, "next")
+print([link.kind for link in deck.links(steps)])         # ['url']
 ```
 
 A link goes on a whole shape, or on `text=` inside it. Targets are URLs (`http`,
@@ -141,8 +147,8 @@ and show the slides in order.
 trend = deck.add_slide("Title Only")
 deck.set_placeholder_text(trend, "title", "Trend")
 deck.add_chart(trend, "line", ["Q1", "Q2", "Q3"],
-               {"North": [120, 135, 150], "South": [95, 110, 99]},
-               Inches(1), Inches(1.8), Inches(10), Inches(5), y_title="EUR k")
+               {"North": [120, 135, 150], "South": [95, 110, 99]}, x=Inches(1), y=Inches(1.8),
+               width=Inches(10), height=Inches(5), y_title="EUR k")
 ```
 
 See [Charts](charts.md).

@@ -2,7 +2,7 @@
 in the presentation's extension list.
 
     deck.set_sections([("Introduction", s1), ("Results", s4)])
-    deck.sections()          # [("Introduction", [1, 2, 3]), ("Results", [4, 5])]
+    deck.sections()          # [SlideSection("Introduction", [1, 2, 3]), ...]
     deck.set_sections([])    # remove them
 
 Each section starts at the given slide and runs to the next one; slides before
@@ -52,7 +52,8 @@ def _slide_ids(deck: PresentationDocument) -> list[str]:
 
 
 def set_sections(deck: PresentationDocument, sections) -> None:
-    """``[(name, first slide), ...]`` in slide order; first slides are slide
+    """``[(name, first slide), ...]`` (or ``SlideSection`` records, as
+    ``sections()`` returns them) in slide order; first slides are slide
     elements or 1-based numbers.  An empty list removes the sections."""
     ext = _ext(deck, create=False)
     if ext is not None:
@@ -66,6 +67,7 @@ def set_sections(deck: PresentationDocument, sections) -> None:
     ids = _slide_ids(deck)
     slides = deck.slides
     starts = []
+    sections = [(e.name, e.slides[0]) if hasattr(e, "slides") else e for e in sections]
     for name, first in sections:
         if not name:
             raise ValueError("a section needs a name")
@@ -93,8 +95,11 @@ def set_sections(deck: PresentationDocument, sections) -> None:
     _ext(deck, create=True).add(lst)  # type: ignore[union-attr]
 
 
-def sections(deck: PresentationDocument) -> list[tuple[str, list[int]]]:
-    """``[(name, [1-based slide numbers]), ...]``; empty without sections."""
+def sections(deck: PresentationDocument) -> list:
+    """A ``SlideSection`` (name, 1-based slide numbers) per section; empty
+    without sections."""
+    from .records import SlideSection
+
     ext = _ext(deck, create=False)
     if ext is None:
         return []
@@ -103,7 +108,7 @@ def sections(deck: PresentationDocument) -> list[tuple[str, list[int]]]:
     for sec in ext.iter(f"{{{P14}}}section"):
         members = [number[s.get("id")] for s in sec.iter(f"{{{P14}}}sldId")
                    if s.get("id") in number]
-        out.append((sec.get("name") or "", members))
+        out.append(SlideSection(sec.get("name") or "", members))
     return out
 
 

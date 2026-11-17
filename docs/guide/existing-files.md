@@ -41,7 +41,10 @@ print(book.properties.as_dict())
 
 | Word | Excel | PowerPoint |
 |---|---|---|
-| `teletype.extractText(doc.body)`, `doc.tables()`, `doc.list_labels()`, `doc.sections`, `doc.hyperlinks()`, `doc.bookmarks()`, `doc.footnotes()`, `doc.comments()`, `doc.revisions()`, `doc.fields()`, `doc.content_controls()`, `doc.pictures()`, `doc.text_boxes()`, `doc.charts()`, `doc.protection()` | `book.values()`, `book.cells()`, `book.value()`, `book.display_text()`, `book.cell_format()`, `book.merged_cells()`, `book.defined_names()`, `book.validations()`, `book.conditional_formats()`, `book.tables()`, `book.comments()`, `book.hyperlinks()`, `book.charts()`, `book.page_setup_info()`, `book.sheet_options_info()` | `deck.layout_names`, `deck.slide_layout()`, `deck.placeholders()`, `deck.shapes()`, `deck.tables()`, `deck.notes()`, `deck.links()`, `deck.sections()`, `deck.charts()` |
+| `teletype.extractText(doc.body)`, `doc.formatting()`, `doc.tables()`, `doc.list_labels()`, `doc.sections`, `doc.hyperlinks()`, `doc.bookmarks()`, `doc.footnotes()`, `doc.comments()`, `doc.revisions()`, `doc.fields()`, `doc.content_controls()`, `doc.pictures()`, `doc.text_boxes()`, `doc.charts()`, `doc.protection()` | `book.values()`, `book.cells()`, `book.value()`, `book.display_text()`, `book.cell_format()`, `book.merged_cells()`, `book.defined_names()`, `book.validations()`, `book.conditional_formats()`, `book.tables()`, `book.comments()`, `book.hyperlinks()`, `book.charts()`, `book.page_setup()`, `book.sheet_options()` | `deck.layout_names`, `deck.slide_layout()`, `deck.placeholders()`, `deck.shapes()`, `deck.tables()`, `deck.notes()`, `deck.links()`, `deck.sections()`, `deck.charts()` |
+
+Readers never change the file, and the Word readers report what Word shows: see
+[Reading a document as Word shows it](reading.md).
 
 ## Changing a file without disturbing it
 
@@ -123,17 +126,43 @@ print(part.partname, rel_id)                               # /word/comments.xml 
 
 ## Working with the tree
 
-Every element is an lxml element, so XPath and the rest of lxml are available. The
-`oox.grammar.URI` table maps prefixes to namespace URIs:
+Every element is an lxml element, so XPath and the rest of lxml are available.
+`oox.ns` has a constant for every namespace (`W`, `A`, `R`, `MC` ...) and `qn("w:p")`
+for the `{uri}local` names lxml uses:
 
 ```python
-from oox.grammar import URI
+from oox.ns import W, qn
 
-W = URI["w"]
-for p in doc.body.iter(f"{{{W}}}p"):
+for p in doc.body.iter(qn("w:p")):                     # or f"{{{W}}}p"
     print(p.tag_name, len(p))
 print(doc.body.xpath("count(.//w:t)", namespaces={"w": W}))
 ```
+
+## Parts and relationships
+
+Each part's relationships are a mapping from relationship id to `Relationship`
+(`rid`, `reltype`, `target`, `external`). `part.related_part(rid)` follows one,
+`part.blob` gives a part's bytes and `doc.part_of(element)` finds the part an element
+lives in. The parts a Word document usually has are properties: `styles_part`,
+`settings_part`, `numbering_part`, `theme_part`, `footnotes_part`, `endnotes_part`,
+`comments_part` and `font_table_part`; a workbook has `shared_strings_part`,
+`styles_part` and `theme_part`. Each is None when the file has no such part.
+
+```python
+main = doc.main_part
+for rid, rel in main.rels.items():
+    if not rel.external:
+        print(rid, main.related_part(rid).partname)
+
+for picture in doc.pictures():
+    image = doc.image_of(picture)          # (data, content_type, partname, external)
+    print(image.content_type, len(image.data or b""))
+```
+
+`image_of` takes a picture from `pictures()`, any element that holds an image
+reference (`w:drawing`, `pic:pic`, `a:blip`, VML `v:imagedata`) or a picture bullet
+from `list_labels()`; a linked image comes back with `data` None and its address in
+`external`.
 
 ## Other Python libraries
 

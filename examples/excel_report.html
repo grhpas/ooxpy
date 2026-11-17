@@ -54,7 +54,7 @@ in any workbook.</p>
 <h2>Layout</h2>
 <pre><code class="run">book.set_column_width("Orders", "A", 22)        # characters, as Excel shows them
 book.set_column_width("Orders", "B:C", 14)
-book.freeze_panes("Orders", "A2")                # keep the header row visible
+book.set_frozen_panes("Orders", "A2")                # keep the header row visible
 book.auto_filter("Orders", "A1:C3")
 book.merge_cells("Orders", "A5:C5")
 book.define_name("Amounts", "Orders", "B2:B3")

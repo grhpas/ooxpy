@@ -2,12 +2,12 @@
 Review > Protect Workbook.
 
     doc.protect("readOnly", password="secret")    # or comments, trackedChanges, forms
-    doc.protection()       # {"edit": "readOnly", "enforced": True, "password": True, ...}
+    doc.protection()       # Protection(edit="readOnly", enforced=True, password=True, ...)
     doc.check_protection_password("secret")        # True
     doc.unprotect()
 
     book.protect_workbook(password="secret")       # lock the structure (sheets)
-    book.workbook_protection()                     # {"structure": True, ...}
+    book.workbook_protection()                     # WorkbookProtection(structure=True, ...)
 
 Word's password hash (ECMA-376 Part 1 §17.15.1.29, Part 4 §14.8.1): the
 password is first reduced to Word 97's 32-bit key (a high-order word from an
@@ -125,11 +125,14 @@ def protect(doc: WordprocessingDocument, edit: str = "readOnly", *,
                      cryptAlgorithmSid=_SID[algorithm], cryptSpinCount=spin_count,
                      hash=word_password_hash(password, salt, algorithm, spin_count),
                      salt=base64.b64encode(salt).decode("ascii"))
-    doc.settings.add(w.DocumentProtection(**attrs), replace=True)
+    doc.ensure_settings().add(w.DocumentProtection(**attrs), replace=True)
 
 
-def protection(doc: WordprocessingDocument) -> dict | None:
-    """``{"edit", "enforced", "password", "algorithm", "formatting"}``, or None."""
+def protection(doc: WordprocessingDocument):
+    """A ``Protection`` record (edit, enforced, password, algorithm,
+    formatting), or None."""
+    from .records import Protection
+
     found = doc.related_parts(doc.main_part, "DocumentSettingsPart")
     if not found:
         return None
@@ -139,11 +142,11 @@ def protection(doc: WordprocessingDocument) -> dict | None:
     sid = _w(el, "cryptAlgorithmSid")
     algorithm = _w(el, "algorithmName") or (
         _ALGORITHM_OF_SID.get(int(sid)) if sid and sid.isdigit() else None)
-    return {"edit": _w(el, "edit") or "none",
-            "enforced": (_w(el, "enforcement") or "0") in ("1", "true", "on"),
-            "password": bool(_w(el, "hash") or _w(el, "hashValue")),
-            "algorithm": algorithm,
-            "formatting": (_w(el, "formatting") or "0") in ("1", "true", "on")}
+    return Protection(edit=_w(el, "edit") or "none",
+                      enforced=(_w(el, "enforcement") or "0") in ("1", "true", "on"),
+                      password=bool(_w(el, "hash") or _w(el, "hashValue")),
+                      algorithm=algorithm,
+                      formatting=(_w(el, "formatting") or "0") in ("1", "true", "on"))
 
 
 def check_password(doc: WordprocessingDocument, password: str) -> bool:
@@ -157,8 +160,8 @@ def check_password(doc: WordprocessingDocument, password: str) -> bool:
     if not stored:
         return True
     salt = base64.b64decode(_w(el, "salt") or _w(el, "saltValue") or "")
-    info = protection(doc) or {}
-    algorithm = info.get("algorithm") or "SHA-1"
+    info = protection(doc)
+    algorithm = (info.algorithm if info is not None else None) or "SHA-1"
     spin = int(_w(el, "cryptSpinCount") or _w(el, "spinCount") or "0")
     if algorithm not in _HASHLIB:
         raise ValueError(f"can't check a {algorithm} hash")
@@ -190,8 +193,10 @@ def protect_workbook(book: SpreadsheetDocument, *, password: str | None = None,
     book.workbook.add(x.WorkbookProtection(**attrs), replace=True)
 
 
-def workbook_protection(book: SpreadsheetDocument) -> dict | None:
-    """``{"structure", "windows", "password"}``, or None."""
+def workbook_protection(book: SpreadsheetDocument):
+    """A ``WorkbookProtection`` record (structure, windows, password), or None."""
+    from .records import WorkbookProtection
+
     el = book.workbook.first("x:workbookProtection")
     if el is None:
         return None
@@ -199,8 +204,9 @@ def workbook_protection(book: SpreadsheetDocument) -> dict | None:
     def on(attr: str) -> bool:
         return (el.get(attr) or "0") in ("1", "true")
 
-    return {"structure": on("lockStructure"), "windows": on("lockWindows"),
-            "password": bool(el.get("workbookPassword") or el.get("workbookHashValue"))}
+    return WorkbookProtection(structure=on("lockStructure"), windows=on("lockWindows"),
+                              password=bool(el.get("workbookPassword")
+                                            or el.get("workbookHashValue")))
 
 
 def agile_password_hash(password: str, salt: bytes, algorithm: str = "SHA-512",

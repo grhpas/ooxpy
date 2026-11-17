@@ -18,7 +18,6 @@ _T, _TAB, _BR, _CR, _P, _R = (f"{{{W}}}{n}" for n in ("t", "tab", "br", "cr", "p
 _PTAB = f"{{{W}}}ptab"
 _NOBREAK_HYPHEN = f"{{{W}}}noBreakHyphen"
 _TXBX = f"{{{W}}}txbxContent"
-_FALLBACK = f"{{{URI['mc']}}}Fallback"
 _TEXT_TAGS = frozenset((_T, _TAB, _PTAB, _BR, _CR, _NOBREAK_HYPHEN))
 
 
@@ -30,32 +29,18 @@ def extractText(element, text_boxes: bool = True) -> str:
     are not ``w:t`` and are skipped.  Like odfpy, no separator is inserted
     between paragraphs.
 
-    Markup-compatibility fallbacks (``mc:Fallback``, e.g. the VML copy Word
-    keeps of every text box) are skipped, so such content counts once.
+    Markup compatibility is read as Word reads it (``oox.walk``): of each
+    ``mc:AlternateContent`` only the branch a reader shows counts, so the
+    VML copy Word keeps of every text box isn't counted twice.
     ``text_boxes=False`` also leaves out text boxes below ``element``
     (``w:txbxContent``), as Word's ``Paragraph.Range.Text`` does.
     """
-    skip = {_FALLBACK} if text_boxes else {_FALLBACK, _TXBX}
-    if not any(True for _ in element.iter(*skip)):  # the common case: one plain walk
+    from .walk import ALTERNATE, iter_story
+
+    if not any(True for _ in element.iter(ALTERNATE, *(() if text_boxes else (_TXBX,)))):
+        # the common case: nothing to skip, one plain walk
         return "".join(_pieces(element.iter(_T, _TAB, _PTAB, _BR, _CR, _NOBREAK_HYPHEN)))
-    return "".join(_pieces(_walk(element, skip)))
-
-
-def _walk(element, skip):
-    """Text elements below ``element`` in document order, pruning ``skip`` subtrees."""
-    stack = [iter(element)]
-    while stack:
-        el = next(stack[-1], None)
-        if el is None:
-            stack.pop()
-            continue
-        tag = el.tag
-        if tag in skip:
-            continue
-        if tag in _TEXT_TAGS:
-            yield el
-        if len(el):
-            stack.append(iter(el))
+    return "".join(_pieces(iter_story(element, *_TEXT_TAGS, text_boxes=text_boxes)))
 
 
 def _pieces(elements):

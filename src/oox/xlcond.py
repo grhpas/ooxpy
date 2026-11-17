@@ -9,7 +9,7 @@
     book.conditional_format("Sheet1", "A2:A20", "text", text="North", style={"bold": True})
     book.conditional_format("Sheet1", "A2:E20", "formula", formula="$E2>$D2",
                             style={"fill": "C6EFCE"})
-    book.conditional_formats("Sheet1")   # [{"range": "B2:B20", "type": "cellIs", ...}, ...]
+    book.conditional_formats("Sheet1")   # [ConditionalFormat(ref="B2:B20", rule="cell", ...)]
 
 Rules: ``cell`` (operator ``>``, ``>=``, ``<``, ``<=``, ``=``, ``!=``, ``between``,
 ``not between``), ``formula``, ``color_scale`` (2 or 3 colours), ``data_bar``,
@@ -79,6 +79,8 @@ def conditional_format(book: SpreadsheetDocument, sheet: str, ref: str, rule: st
         attrs["stopIfTrue"] = True
     kids: list[OoxElement] = []
     style = opt.get("style")
+    if style is not None and hasattr(style, "as_dict"):  # a CellFormat, as read back
+        style = style.as_dict()
 
     def need_style() -> None:
         if not style:
@@ -169,37 +171,76 @@ def conditional_format(book: SpreadsheetDocument, sheet: str, ref: str, rule: st
     return cf_rule
 
 
-def conditional_formats(book: SpreadsheetDocument, sheet: str) -> list[dict[str, Any]]:
-    """``{"range", "type", "priority", ...}`` per rule, in priority order:
-    ``operator``, ``formulas``, ``style`` (the highlight), ``colors``,
-    ``icons``, ``rank``, ``text`` where they apply."""
+_RULE_OF = {"expression": "formula", "colorScale": "color_scale", "dataBar": "data_bar",
+            "iconSet": "icon_set", "duplicateValues": "duplicates", "uniqueValues": "unique",
+            "containsBlanks": "blanks", "notContainsBlanks": "no_blanks"}
+_HOW_OF = {"containsText": "contains", "notContainsText": "not contains",
+           "beginsWith": "begins", "endsWith": "ends"}
+_SYMBOL_OF = {"greaterThan": ">", "greaterThanOrEqual": ">=", "lessThan": "<",
+              "lessThanOrEqual": "<=", "equal": "=", "notEqual": "!=", "between": "between",
+              "notBetween": "not between"}
+
+
+def _value_of(formula: str | None) -> Any:
+    if formula is None:
+        return None
+    if len(formula) >= 2 and formula[0] == formula[-1] == '"':
+        return formula[1:-1].replace('""', '"')
+    try:
+        number = float(formula)
+    except ValueError:
+        return "=" + formula
+    return int(number) if number.is_integer() and "." not in formula else number
+
+
+def conditional_formats(book: SpreadsheetDocument, sheet: str) -> list:
+    """A ``ConditionalFormat`` per rule, in priority order, with the options
+    ``conditional_format`` takes (``rule``, ``operator``, ``value(s)``,
+    ``formula``, ``colors``, ``color``, ``icons``, ``n``, ``percent``,
+    ``text``, ``how``, ``style``) where they apply."""
+    from .records import CellFormat, ConditionalFormat
     from .xlstyles import StyleSheet
 
     st = StyleSheet(book, create=False)
     out = []
     for cf in book.sheet(sheet).iterchildren(f"{{{X}}}conditionalFormatting"):
         for r in cf.iterchildren(f"{{{X}}}cfRule"):
-            item: dict[str, Any] = {"range": cf.get("sqref"), "type": r.get("type"),
-                                    "priority": int(r.get("priority", "0"))}
-            if r.get("operator"):
-                item["operator"] = r.get("operator")
-            formulas = [f.text for f in r.iterchildren(f"{{{X}}}formula")]
-            if formulas:
-                item["formulas"] = formulas
-            if r.get("dxfId") is not None:
-                item["style"] = st.describe_dxf(int(r.get("dxfId")))
-            if r.get("rank"):
-                item["rank"] = int(r.get("rank"))
-            if r.get("text"):
-                item["text"] = r.get("text")
+            kind = r.get("type")
+            formulas = [f.text or "" for f in r.iterchildren(f"{{{X}}}formula")]
+            opt: dict[str, Any] = {"ref": cf.get("sqref"), "type": kind,
+                                   "priority": int(r.get("priority", "0")),
+                                   "formulas": formulas,
+                                   "stop": r.get("stopIfTrue") in ("1", "true")}
+            rule = _RULE_OF.get(kind or "")
+            if kind == "cellIs":
+                rule = "cell"
+                opt["operator"] = _SYMBOL_OF.get(r.get("operator") or "", r.get("operator"))
+                if len(formulas) == 2:
+                    opt["values"] = [_value_of(f) for f in formulas]
+                elif formulas:
+                    opt["value"] = _value_of(formulas[0])
+            elif kind == "expression" and formulas:
+                opt["formula"] = "=" + formulas[0]
+            elif kind == "top10":
+                rule = "bottom" if r.get("bottom") in ("1", "true") else "top"
+                opt["n"] = int(r.get("rank", "10"))
+                opt["percent"] = r.get("percent") in ("1", "true")
+            elif kind == "aboveAverage":
+                rule = ("below_average" if r.get("aboveAverage") in ("0", "false")
+                        else "above_average")
+            elif kind in _HOW_OF:
+                rule, opt["how"], opt["text"] = "text", _HOW_OF[kind], r.get("text")
             scale = r.first("x:colorScale")
             if scale is not None:
-                item["colors"] = [c.get("rgb")[-6:] for c in scale.iterchildren(f"{{{X}}}color")]
+                opt["colors"] = [(c.get("rgb") or "")[-6:]
+                                 for c in scale.iterchildren(f"{{{X}}}color")]
             bar = r.first("x:dataBar")
             if bar is not None and bar.first("x:color") is not None:
-                item["colors"] = [bar.first("x:color").get("rgb")[-6:]]
+                opt["color"] = (bar.first("x:color").get("rgb") or "")[-6:]
             icons = r.first("x:iconSet")
             if icons is not None:
-                item["icons"] = icons.get("iconSet", "3TrafficLights1")
-            out.append(item)
-    return sorted(out, key=lambda i: i["priority"])
+                opt["icons"] = icons.get("iconSet", "3TrafficLights1")
+            if r.get("dxfId") is not None:
+                opt["style"] = CellFormat(**st.describe_dxf(int(r.get("dxfId"))))
+            out.append(ConditionalFormat(rule=rule, **opt))
+    return sorted(out, key=lambda c: c.priority)

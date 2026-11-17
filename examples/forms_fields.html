@@ -24,18 +24,20 @@ properties, content controls, more image formats. Script: <code>examples/forms_f
 <pre><code class="run">from oox import WordprocessingDocument
 
 doc = WordprocessingDocument.new()
-doc.add_style("Note", italic=True, color="595959", indent_left=720, space_before=6)
+doc.add_style("Note", italic=True, color="595959", indent_left=36, space_before=6)
 p = doc.add_paragraph("", style="Note")
 warning = doc.add_run(p, "Warning: ", bold=True, color="C00000")
 doc.add_run(p, "check the figures.", size=12, font="Georgia")
 doc.format_paragraph(p, align="center", space_after=12)
-f = doc.effective_format(p, warning)
-print(f["bold"], f["italic"], f["color"], f["style"], f["space_before"])</code></pre>
-<pre class="out">True True C00000 Note 6.0</pre>
-<p>Sizes and spacing are in points; indents in twips (720 = ½ inch) or
-<code>oox.units</code> (<code>Cm(1)</code>). <code>effective_format</code> works out what
-Word shows: defaults, then the style chain, then direct formatting, with theme fonts
-looked up. It works on any document.</p>
+fmt = doc.formatting()
+para, run = fmt.paragraph(p), fmt.run(warning)
+print(run.bold, run.italic, run.color, para.style, para.space_before, para.indent_left)</code></pre>
+<pre class="out">True True C00000 Note 6.0 36.0</pre>
+<p>Sizes, spacing and indents are in points (36 pt = ½ inch), or a length from
+<code>oox.units</code> (<code>Cm(1)</code>). <code>doc.formatting()</code> works out what
+Word shows: document defaults, table styles, the style chain, numbering, character styles
+and direct formatting, with theme fonts looked up. It works on any document, and it
+reports values in the forms the writers take.</p>
 
 <h2>Properties</h2>
 <pre><code class="run">doc.properties.title = "Quarterly figures"
@@ -56,7 +58,7 @@ doc.add_cross_reference(q, cap, what="position")      # "above"
 doc.add_run(q, " - ")
 doc.add_field(q, 'DOCPROPERTY "Company"')
 first = doc.add_caption("Inserted earlier", label="Table", before=cap.paragraph)
-print(cap.number, [f["result"] for f in doc.fields() if f["name"] in ("REF", "DOCPROPERTY")])</code></pre>
+print(cap.number, [f.result for f in doc.fields() if f.name in ("REF", "DOCPROPERTY")])</code></pre>
 <pre class="out">2 ['Table 2', 'above', 'Example Ltd']</pre>
 <p>Word only recomputes fields on F9 or printing, so oox writes correct results:
 captions renumber when one is inserted, and references follow.
@@ -74,7 +76,7 @@ form.add_date_control(form.add_paragraph("From: "), tag="from", fmt="d MMMM yyyy
 form.add_checkbox(form.add_paragraph("Informed: "), tag="informed")
 form.fill_controls({"name": "Ada", "type": "Sick", "from": dt.date(2026, 12, 21),
                     "informed": True})
-print([(c["tag"], c["value"]) for c in form.content_controls()])</code></pre>
+print([(c.tag, c.value) for c in form.content_controls()])</code></pre>
 <pre class="out">[('name', 'Ada'), ('type', 'Sick'), ('from', '21 December 2026'), ('informed', True)]</pre>
 <p>A template with controls is filled by tag, so the layout stays the template author's.
 Check boxes are an Office 2010 feature; Word 2007 shows the ☐/☒ character instead.</p>

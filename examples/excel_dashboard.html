@@ -31,7 +31,7 @@ for row in [("North", 100, 120), ("South", 100, 30), ("West", 80, 84)]:
 book.add_table("Sales", "A1:C4", name="Sales2026",
                totals={"Region": "Total", "Target": "sum", "Actual": "sum"})
 book.set_value("Sales", "E1", Formula("SUM(Sales2026[Actual])", 234))
-print(book.tables("Sales")[0]["ref"], book.value("Sales", "C5"))</code></pre>
+print(book.tables("Sales")[0].ref, book.value("Sales", "C5"))</code></pre>
 <pre class="out">A1:C5 234</pre>
 <p>The first row is the header. The totals row uses <code>SUBTOTAL</code> formulas, and oox
 stores their results, so readers that don't calculate see the numbers too.
@@ -42,8 +42,8 @@ stores their results, so readers that don't calculate see the numbers too.
                         style={"fill": "FFC7CE", "color": "9C0006"})
 book.conditional_format("Sales", "C2:C4", "data_bar", color="638EC6")
 book.conditional_format("Sales", "A2:A4", "text", text="South", style={"bold": True})
-print([r["type"] for r in book.conditional_formats("Sales")])</code></pre>
-<pre class="out">['expression', 'dataBar', 'containsText']</pre>
+print([r.rule for r in book.conditional_formats("Sales")])</code></pre>
+<pre class="out">['formula', 'data_bar', 'text']</pre>
 <p>Rules: <code>cell</code> (<code>&gt;</code>, <code>between</code> ...), <code>formula</code>,
 <code>color_scale</code>, <code>data_bar</code>, <code>icon_set</code>, <code>top</code>/<code>bottom</code>,
 <code>above_average</code>, <code>duplicates</code>/<code>unique</code>, <code>text</code>,
@@ -54,17 +54,18 @@ print([r["type"] for r in book.conditional_formats("Sales")])</code></pre>
 book.add_comment("Sales", "C3", "Storm damage closed two stores.", author="Ada")
 book.add_hyperlink("Sales", "E3", "https://ecma-international.org/", text="About OOXML")
 book.add_hyperlink("Sales", "E4", "#Lookup!A1", text="Region codes")
-print(book.comments("Sales"), book.hyperlinks("Sales")["E4"])</code></pre>
-<pre class="out">{'C3': ('Ada', 'Storm damage closed two stores.')} #Lookup!A1</pre>
+note, link = book.comments("Sales")["C3"], book.hyperlinks("Sales")["E4"]
+print(note.author, note.text, link.text, link.target)</code></pre>
+<pre class="out">Ada Storm damage closed two stores. Region codes #Lookup!A1</pre>
 
 <h2>Print setup and sheet options</h2>
-<pre><code class="run">book.page_setup("Sales", orientation="landscape", paper="A4", fit_width=1,
+<pre><code class="run">book.set_page_setup("Sales", orientation="landscape", paper="A4", fit_width=1,
                 repeat_rows="1:1", footer={"right": "Page {page} of {pages}"})
-book.sheet_options("Sales", tab_color="2F5496")
-book.sheet_options("Lookup", hidden=True)
+book.set_sheet_options("Sales", tab_color="2F5496")
+book.set_sheet_options("Lookup", hidden=True)
 book.protect_sheet("Sales", password="secret", allow=("sort",))
 book.share_strings()
-print(book.sheet_options_info("Lookup")["hidden"], book.page_setup_info("Sales")["footer"])
+print(book.sheet_options("Lookup").hidden, book.page_setup("Sales").footer)
 book.save("dashboard.xlsx")</code></pre>
 <pre class="out">True {'right': 'Page {page} of {pages}'}</pre>
 <p>Header and footer text takes <code>{page}</code>, <code>{pages}</code>, <code>{date}</code>,

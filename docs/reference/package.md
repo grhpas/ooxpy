@@ -31,6 +31,14 @@ open(
 
 Open an OPC package.  Any problem with the file raises `PackageError`.
 
+### `part_of`
+
+```python
+part_of(element: etree._Element) -> Part
+```
+
+The part whose XML tree contains `element`.
+
 ### `relate`
 
 ```python
@@ -68,6 +76,12 @@ The package as bytes (what `save` writes).
 
 ## `Part`
 
+### `blob`
+
+*read-only property*
+
+The part's bytes, as they would be saved.
+
 ### `element`
 
 *read-only property*
@@ -79,6 +93,16 @@ Root element (parsed on first access).
 *read-only property*
 
 Whether the part holds XML (by content type).
+
+### `related_part`
+
+```python
+related_part(rid: str) -> Part
+```
+
+The part that relationship `rid` of this part points to.  Raises
+`KeyError` for an unknown id and `PackageError` for an external
+link or a missing target.
 
 ### `rels_name`
 

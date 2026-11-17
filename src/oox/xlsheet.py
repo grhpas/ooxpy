@@ -5,7 +5,7 @@ autofilter, defined names and data validation -- each with a reader.
     book.set_column_width("Sheet1", "B:D", 12)
     book.set_row_height("Sheet1", 1, 30)              # points
     book.merge_cells("Sheet1", "A1:D1")
-    book.freeze_panes("Sheet1", "A2")                 # keep row 1 visible
+    book.set_frozen_panes("Sheet1", "A2")                 # keep row 1 visible
     book.auto_filter("Sheet1", "A1:D20")
     book.define_name("Sales", "Sheet1", "B2:D20")
     book.add_validation("Sheet1", "E2:E20", values=["Yes", "No"])   # drop-down list
@@ -217,7 +217,7 @@ def unmerge_cells(ws: OoxElement, ref: str) -> None:
 
 
 # -- frozen panes ------------------------------------------------------------------------------
-def freeze_panes(ws: OoxElement, ref: str | None) -> None:
+def set_frozen_panes(ws: OoxElement, ref: str | None) -> None:
     """Freeze rows above and columns left of ``ref`` ("B2"); None unfreezes."""
     from .spreadsheet import split_ref
 
@@ -369,22 +369,38 @@ def add_validation(ws: OoxElement, ref: str, *, values: list[str] | None = None,
     return dv
 
 
-def validations(ws: OoxElement) -> list[dict[str, Any]]:
+def _number(text: str | None) -> Any:
+    if text is None:
+        return None
+    try:
+        value = float(text)
+    except ValueError:
+        return text
+    return int(value) if value.is_integer() else value
+
+
+def validations(ws: OoxElement) -> list:
+    """A ``Validation`` per data-validation rule, with ``add_validation``'s
+    options: ``values`` or ``source`` for lists, ``whole``/``decimal`` bounds."""
+    from .records import Validation
+
     dvs = ws.first("x:dataValidations")
     out = []
     for dv in (dvs.iterchildren(f"{{{X}}}dataValidation") if dvs is not None else []):
         f1, f2 = dv.first("x:formula1"), dv.first("x:formula2")
-        item: dict[str, Any] = {"range": dv.get("sqref"), "type": dv.get("type", "none")}
+        kind = dv.get("type", "none")
+        opt: dict[str, Any] = {"ref": dv.get("sqref"), "type": kind,
+                               "allow_blank": dv.get("allowBlank") in ("1", "true"),
+                               "prompt": dv.get("prompt"), "error": dv.get("error")}
         t1 = f1.text if f1 is not None else None
-        if item["type"] == "list" and t1:
+        if kind == "list" and t1:
             if t1.startswith('"'):
-                item["values"] = t1.strip('"').split(",")
+                opt["values"] = t1.strip('"').split(",")
             else:
-                item["source"] = t1
-        else:
-            item["min"] = t1
-            item["max"] = f2.text if f2 is not None else None
-        out.append(item)
+                opt["source"] = t1
+        elif kind in ("whole", "decimal"):
+            opt[kind] = (_number(t1), _number(f2.text if f2 is not None else None))
+        out.append(Validation(**opt))
     return out
 
 

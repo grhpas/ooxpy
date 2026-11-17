@@ -19,18 +19,48 @@ the test suite until it's reviewed and the file is updated deliberately
   `lenient`, `Package`, `Part`, `Limits` and the exceptions;
 - every public method and property of `WordprocessingDocument`,
   `SpreadsheetDocument`, `PresentationDocument`, `OoxDocument` and `OoxElement`;
-- the objects those methods return: `Table`, `Section`, `ListHandle`, `SlideTable`,
-  `Field`, `Caption`, the property sets, `StyleSheet`, `Series`, `Formula`,
-  `CellError`;
+- the objects those methods return: `Table`, `Section`, `ListHandle`, `ListItem`,
+  `SlideTable`, `Field`, `Caption`, the property sets, `StyleSheet`, `Series`,
+  `Formula`, `CellError`, `Formatting`, `RunFormat`, `ParagraphFormat`, `ImageData`,
+  `Relationships` and `Relationship`;
+- the records the readers return (`oox.records`: `Hyperlink`, `Comment`, `Chart`,
+  `PageSetup`, `Shape` …);
+- the formatting value types `LineSpacing`, `Border`, `Borders` and `Tab`
+  (`oox.formatting`);
 - the utility modules `oox.units`, `oox.teletype`, `oox.odfcompat`, `oox.errors`,
   and the helpers `cell`, `row`, `cell_ref`, `column_letter`, `split_ref`,
   `excel_serial`, `from_excel_serial` (`oox.spreadsheet`), `build_chart`,
   `chart_info`, `PALETTE` (`oox.charts`);
-- the element factories in `oox.ns` (see below).
+- `oox.ns`: the namespace constants (`W`, `A`, `R` …), `qn` and the element
+  factories (see below).
 
-The dictionaries the readers return (`doc.comments()`, `book.tables(sheet)`,
-`deck.shapes(slide)` …) are public too: keys are only added, never renamed or
-removed within a major version.
+## Conventions the API keeps
+
+- **Writers are verbs, readers are nouns.** `set_page_setup` writes and
+  `page_setup` reads; `add_validation` adds and `validations` reads. The same idea
+  has the same name in all three formats (`add_text_box`, `hyperlinks`, `charts`).
+- **Readers return records** (`oox.records`): frozen objects with named fields.
+  Fields are only ever added, never renamed or removed within a major version;
+  construct records with keywords, not positions, if you construct them at all.
+  Where a writer exists, field names are its keyword names. Readers whose result is
+  data (`values()`, `defined_names()`) return plain lists and dicts.
+- **A plain number is points**; anything else is a `Length` from `oox.units`
+  (`Cm(2)`, `Inches(1)`, `Emu(n)`). Readers report points. The one exception is
+  Excel's column width, in characters as in Excel. Values far too large to be
+  points are refused with an error that names `Emu()`.
+- **Positions and sizes are keywords** (`x`, `y`, `width`, `height`), optional
+  where a sensible default exists.
+
+## Reading never changes a document
+
+Every reader — properties such as `doc.styles` or `section.page_width`, methods
+such as `doc.tables()`, `doc.formatting()` or `section.header()` — leaves the
+document exactly as it was: saving after any amount of reading writes the same
+bytes as saving without it. Readers report what Word shows when a part or setting
+is missing (Letter page, 1-inch margins, no header) instead of creating it; the
+`ensure_*` methods (`ensure_styles()`, `ensure_header()` …) and setters are the
+ones that write. `tests/test_reading_is_pure.py` classifies every public member as
+a reader or a writer and checks each reader on bare and feature-rich files.
 
 **Not public:** the modules behind the document methods (`oox.xlsheet`,
 `oox.floating`, `oox.protection`, `oox.textboxes` …), `oox.grammar`,

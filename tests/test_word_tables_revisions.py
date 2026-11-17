@@ -33,21 +33,23 @@ def test_add_table_defaults_share_text_width():
     doc = WordprocessingDocument.new()
     t = doc.add_table([["a", "b"], ["c", 1.5], ["d"]])
     assert (t.n_rows, t.n_cols) == (3, 2)
-    assert t.widths == [doc.sections[0].text_width // 2] * 2
+    assert t.widths == [225.65] * 2     # A4's text width (451.3 pt), shared
     assert t.values() == [["a", "b"], ["c", "1.5"], ["d", ""]]
     assert t.element.first("w:tblPr").first("w:tblLayout") is None
     assert not doc.validate(target="Office2007")
 
 
-def test_widths_in_emu_or_twips_and_fixed_layout():
+def test_widths_in_points_or_lengths_and_fixed_layout():
     doc = WordprocessingDocument.new()
-    t = doc.add_table([["a", "b"]], widths=[Cm(5), 1440])
-    assert t.widths == [2835, 1440]
+    t = doc.add_table([["a", "b"]], widths=[Cm(5), 72])
+    assert t.widths == [141.75, 72]
     assert t.element.first("w:tblPr").first("w:tblLayout") is not None
-    t.set_widths([2000, 3000])
-    assert t.widths == [2000, 3000]
+    t.set_widths([100, 150])
+    assert t.widths == [100, 150]
     tcw = t.cell(0, 1).first("w:tcPr").first("w:tcW")
     assert tcw.get(W + "w") == "3000"
+    with pytest.raises(ValueError, match="Emu"):
+        t.set_widths([2000, 3000])          # twips from old code
     with pytest.raises(ValueError):
         t.set_widths([1])
     with pytest.raises(ValueError):
@@ -69,7 +71,7 @@ def test_header_rows_repeat_and_bold():
 
 def test_horizontal_merge_keeps_text_and_grid_coordinates():
     doc = WordprocessingDocument.new()
-    t = doc.add_table([["a", "b", "c"], ["d", "e", "f"]], widths=[1000, 2000, 3000])
+    t = doc.add_table([["a", "b", "c"], ["d", "e", "f"]], widths=[50, 100, 150])
     merged = t.merge(0, 0, 0, 1)
     assert t.cell(0, 1) is merged and t.cell(0, 2) is not merged
     assert t.values()[0] == ["a\nb", None, "c"]
@@ -174,8 +176,8 @@ def test_floating_picture_wraps_validate_and_read_back(wrap):
     doc.add_floating_picture(png(), width=Cm(3), x=Cm(1), y=Cm(2), wrap=wrap, descr=wrap)
     assert not doc.validate(target="Office2007")
     (info,) = reopen(doc).pictures()
-    assert info["floating"] and info["wrap"] == wrap and info["descr"] == wrap
-    assert info["width"] == Cm(3)
+    assert info.floating and info.wrap == wrap and info.descr == wrap
+    assert info.width == Cm(3).pt
 
 
 def test_floating_alignment_and_reader_order():
@@ -185,7 +187,7 @@ def test_floating_alignment_and_reader_order():
     doc.add_floating_picture(png(), width=Cm(2), h_align="center", v_align="top",
                              h_relative="page", v_relative="margin", paragraph=p)
     infos = doc.pictures()
-    assert [i["floating"] for i in infos] == [True, False]  # document order
+    assert [i.floating for i in infos] == [True, False]  # document order
     anchor = doc.body.find(".//{http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing}anchor")
     pos_h = anchor.first("wp:positionH")
     assert pos_h.get("relativeFrom") == "page" and pos_h.first("wp:align").text == "center"
@@ -215,10 +217,10 @@ def tracked_doc():
 def test_suggestions_are_listed_in_order():
     doc, _ = tracked_doc()
     revs = doc.revisions()
-    assert [(r["kind"], r["author"], r["text"]) for r in revs] == [
+    assert [(r.kind, r.author, r.text) for r in revs] == [
         ("delete", "Bob", "very "), ("delete", "Ada", "2025"),
         ("insert", "Ada", "2026"), ("insert", "Ada", " Really.")]
-    assert revs[0]["date"] == "2026-11-14T12:00:00Z" and revs[1]["date"] is None
+    assert revs[0].date == "2026-11-14T12:00:00Z" and revs[1].date is None
     ids = [el.get(W + "id") for el in doc.body.iter(W + "ins", W + "del")]
     assert len(set(ids)) == 4
     assert not doc.validate(target="Office2007")
@@ -278,7 +280,7 @@ def test_accept_reject_word_markup_marks_rows_and_formatting():
     doc.body.add(p1, p2, p3, p4)
     t = doc.add_table([["kept"], ["new row"]], style=None)
     t.rows[1].insert(0, w.TrPr(w.Ins(id=5, author="A")))
-    kinds = sorted(r["kind"] for r in doc.revisions())
+    kinds = sorted(r.kind for r in doc.revisions())
     assert kinds == ["format", "move-from", "move-to", "paragraph-insert", "row-insert"]
     snapshot = copy.deepcopy(doc.body)
 
